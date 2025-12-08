@@ -1,0 +1,17 @@
+dbo.InvBücher
+dbo.BookMaxLendingsExceptions
+dbo.BookModuleConfig
+dbo.BücherBuchung
+dbo.KursBücher
+dbo.KlassenBücher
+dbo.Lieferanten
+dbo.LieferantenAnsprechpartner
+dbo.LieferantenSortiment
+dbo.SchuelerTable
+dbo.LehrerTable
+dbo.KlassenTable
+dbo.KursTable
+dbo.Ausleih
+dbo.AusleihReserv
+dbo.Rights
+dbo.WSUser

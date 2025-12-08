@@ -1,0 +1,129 @@
+{
+    "Students": {
+        "new_columns": [
+            {
+                "name": "CreatedAt",
+                "type": "TIMESTAMP",
+                "nullable": false,
+                "default": "NOW()",
+                "description": "Timestamp when record was created"
+            },
+            {
+                "name": "UpdatedAt",
+                "type": "TIMESTAMP",
+                "nullable": false,
+                "default": "NOW()",
+                "description": "Timestamp when record was last updated"
+            },
+            {
+                "name": "IsActive",
+                "type": "BOOLEAN",
+                "nullable": false,
+                "default": "true",
+                "description": "Whether the student record is active"
+            }
+        ],
+        "transformations": [
+            {
+                "type": "lookup_extraction",
+                "source_column": "Status",
+                "target_column": "StatusID",
+                "lookup_table": "StudentStatus",
+                "parameters": {
+                    "create_fk": true
+                }
+            }
+        ]
+    },
+    "Teachers": {
+        "new_columns": [
+            {
+                "name": "CreatedAt",
+                "type": "TIMESTAMP",
+                "nullable": false,
+                "default": "NOW()"
+            },
+            {
+                "name": "UpdatedAt",
+                "type": "TIMESTAMP",
+                "nullable": false,
+                "default": "NOW()"
+            },
+            {
+                "name": "IsActive",
+                "type": "BOOLEAN",
+                "nullable": false,
+                "default": "true"
+            }
+        ]
+    },
+    "Classes": {
+        "new_columns": [
+            {
+                "name": "CreatedAt",
+                "type": "TIMESTAMP",
+                "nullable": false,
+                "default": "NOW()"
+            },
+            {
+                "name": "UpdatedAt",
+                "type": "TIMESTAMP",
+                "nullable": false,
+                "default": "NOW()"
+            }
+        ]
+    },
+    "ApplicantProcedureData": {
+        "new_columns": [
+            {
+                "name": "IsDraft",
+                "type": "SMALLINT",
+                "nullable": false,
+                "default": "0",
+                "description": "Indicates if the applicant procedure data is in draft status"
+            }
+        ]
+    },
+    "ApplicantProcedure": {
+        "new_columns": [
+            {
+                "name": "Status",
+                "type": "SMALLINT",
+                "nullable": false,
+                "default": "1",
+                "description": "Status of the applicant procedure"
+            },
+            {
+                "name": "IsDraft",
+                "type": "SMALLINT",
+                "nullable": false,
+                "default": "0",
+                "description": "Indicates if the applicant procedure is in draft status"
+            },
+            {
+                "name": "GradingScale",
+                "type": "VARCHAR(255)",
+                "nullable": true,
+                "default": "6_POINT",
+                "description": "Grading scale used for the applicant procedure"
+            },
+            {
+                "name": "AgeLimit",
+                "type": "INTEGER",
+                "nullable": true,
+                "default": "12",
+                "description": "Age limit for the applicant procedure"
+            }
+        ]
+    },
+    "ApplicantTable": {
+        "new_columns": [
+            {
+                "name": "UserID",
+                "type": "INTEGER",
+                "nullable": true,
+                "description": "User ID reference"
+            }
+        ]
+    }
+}

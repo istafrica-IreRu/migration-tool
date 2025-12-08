@@ -1,0 +1,62 @@
+{
+    "users": {
+        "name": "Users Module",
+        "description": "Creates the foundational Nr_Users table for personal information",
+        "version": "V000",
+        "affected_tables": [
+            "Students",
+            "Teachers",
+            "Guardians",
+            "ApplicantTable"
+        ],
+        "creates_tables": [
+            "Nr_Users"
+        ]
+    },
+    "enrollment": {
+        "name": "Enrollment/Applicant Module",
+        "description": "Normalizes applicant data, including addresses, guardians, and application info",
+        "version": "V001",
+        "affected_tables": [
+            "ApplicantTable",
+            "ApplicantProcedure",
+            "ApplicantProcedureData"
+        ],
+        "creates_tables": [
+            "Nr_Applicants",
+            "Nr_ApplicantAddresses",
+            "Nr_ApplicantGuardians",
+            "Nr_ApplicationInfo"
+        ]
+    },
+    "guardians": {
+        "name": "Guardians Module",
+        "description": "Normalizes guardian data and links it to students",
+        "version": "V002",
+        "affected_tables": [
+            "Guardians",
+            "Students"
+        ],
+        "creates_tables": [
+            "Nr_Guardians",
+            "Nr_StudentGuardians"
+        ]
+    },
+    "academic": {
+        "name": "Academic Module",
+        "description": "Normalizes academic data like subjects, courses, and grades",
+        "version": "V003",
+        "affected_tables": [
+            "Subjects",
+            "Courses",
+            "Grades",
+            "Classes"
+        ],
+        "creates_tables": [
+            "Nr_Subjects",
+            "Nr_Courses",
+            "Nr_Grades",
+            "Nr_Classes"
+        ]
+    }
+}

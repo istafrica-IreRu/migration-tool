@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "winshool-migration-script"
+version = "0.1.0"
+description = "Simple scaffold for Winshool migration utilities"
+readme = "README.md"
+authors = [
+  { name = "Your Name", email = "you@example.com" }
+]
+requires-python = ">=3.9"
+keywords = ["winschool", "migration", "utilities"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://example.com"
+
+[project.scripts]
+winshool-migration-script = "winshool_migration_script.main:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
