@@ -271,9 +271,16 @@ def run_migration(selected_tables: List[str], translations_file: str, normalize:
             migration_state['tables_completed'] = idx + 1
         
         # Phase 3.5: Add new columns
-        emit_progress('columns', 'Adding new columns...', 80)
-        add_new_columns_to_tables(pg_cursor)
-        pg_conn.commit()  # Commit changes before switching autocommit
+        emit_progress('columns', 'Adding new columns to migrated tables...', 80)
+        try:
+            add_new_columns_to_tables(pg_cursor)
+            pg_conn.commit()  # Commit changes before switching autocommit
+            emit_progress('columns', 'New columns added successfully', 82)
+        except Exception as e:
+            logger.error(f"Error adding new columns: {e}", exc_info=True)
+            emit_progress('columns', f'Warning: Column addition had errors - {str(e)}', 82)
+            # Don't fail the entire migration if column addition fails
+            pg_conn.rollback()
 
         # Phase 4: Constraints and indexes
         emit_progress('constraints', 'Adding constraints and indexes...', 85)
