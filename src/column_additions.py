@@ -84,7 +84,7 @@ def update_schema_definition(new_columns_map: dict) -> None:
 def add_new_columns_to_tables(pg_cursor: psycopg2.extensions.cursor) -> None:
     """
     Adds new columns to migrated tables after raw migration.
-    This ensures columns exist before normalization runs.
+    Reads column additions from SQL file for easier maintenance.
     
     Args:
         pg_cursor: PostgreSQL database cursor
@@ -96,86 +96,60 @@ def add_new_columns_to_tables(pg_cursor: psycopg2.extensions.cursor) -> None:
     logger.info("--- Phase 3.5: Adding New Columns to Migrated Tables ---")
     logger.info("=" * 60)
     
-    # Define which tables need new columns
-    # Format: 'schema.table': [('column_name', 'data_type', nullable, default, description), ...]
-    NEW_COLUMNS = {
-        'public."ApplicantTable"': [
-            ('UserID', 'INTEGER', True, None, 'User ID reference'),
-        ],
-        # Add more tables and columns as needed
-        # Example:
-        # 'public."Students"': [
-        #     ('UserID', 'INTEGER', False, '0', 'User ID reference'),
-        #     ('SomeOtherColumn', 'VARCHAR(255)', True, None, 'Some description'),
-        # ],
-    }
+    # Determine the path to column_additions.sql
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(current_dir)  # Go up one level from src/
+    sql_file_path = os.path.join(project_root, 'reference', 'column_additions.sql')
     
-    print(f"Processing {len(NEW_COLUMNS)} table(s) for column additions")
-    logger.info(f"Processing {len(NEW_COLUMNS)} table(s) for column additions")
+    if not os.path.exists(sql_file_path):
+        print(f"WARNING: Column additions SQL file not found at {sql_file_path}")
+        print("Skipping column additions.")
+        logger.warning(f"Column additions SQL file not found at {sql_file_path}. Skipping column additions.")
+        return
     
-    # Map for schema definition update (table name without schema prefix)
-    schema_update_map = {}
-    columns_added_count = 0
+    print(f"Reading column additions from: {sql_file_path}")
+    logger.info(f"Reading column additions from: {sql_file_path}")
     
-    for table_key, columns in NEW_COLUMNS.items():
-        print(f"\nProcessing table: {table_key}")
-        print(f"  Columns to add: {len(columns)}")
-        logger.info(f"Processing table: {table_key}")
-        logger.info(f"  Columns to add: {len(columns)}")
+    try:
+        # Read the SQL file
+        with open(sql_file_path, 'r', encoding='utf-8') as f:
+            sql_content = f.read()
         
+        if not sql_content.strip():
+            print("WARNING: Column additions SQL file is empty")
+            logger.warning("Column additions SQL file is empty")
+            return
+        
+        print(f"Executing column additions SQL script...")
+        logger.info(f"Executing column additions SQL script...")
+        
+        # Execute the SQL script
         try:
-            for col_info in columns:
-                column_name = col_info[0]
-                data_type = col_info[1]
-                
-                alter_sql = f'''
-                ALTER TABLE {table_key}
-                ADD COLUMN IF NOT EXISTS "{column_name}" {data_type};
-                '''
-                
-                print(f"  Adding column '{column_name}' ({data_type}) to {table_key}")
-                logger.info(f"  Adding column '{column_name}' ({data_type}) to {table_key}")
-                
-                try:
-                    pg_cursor.execute(alter_sql)
-                    columns_added_count += 1
-                    print(f"  ✓ Column '{column_name}' added successfully")
-                    logger.info(f"  ✓ Column '{column_name}' added successfully")
-                except Exception as col_error:
-                    print(f"  ✗ Error adding column '{column_name}': {col_error}")
-                    logger.error(f"  ✗ Error adding column '{column_name}': {col_error}")
-                    raise
+            pg_cursor.execute(sql_content)
+            print("✓ Column additions executed successfully")
+            logger.info("✓ Column additions executed successfully")
             
-            # Extract table name for schema definition update
-            # Remove schema prefix and quotes: 'public."ApplicantTable"' -> 'ApplicantTable'
-            table_name = table_key.split('.')[-1].strip('"')
-            schema_update_map[table_name] = columns
-            print(f"✓ Completed processing table: {table_key}")
-            logger.info(f"✓ Completed processing table: {table_key}")
+            # Get row count if available
+            if pg_cursor.rowcount >= 0:
+                print(f"  Rows affected: {pg_cursor.rowcount}")
+                logger.info(f"  Rows affected: {pg_cursor.rowcount}")
                 
         except psycopg2.Error as e:
-            print(f"✗ Error adding columns to {table_key}: {e}")
+            print(f"✗ Error executing column additions SQL: {e}")
             print(f"  Error details: {type(e).__name__}: {str(e)}")
-            logger.error(f"✗ Error adding columns to {table_key}: {e}")
+            logger.error(f"✗ Error executing column additions SQL: {e}")
             logger.error(f"  Error details: {type(e).__name__}: {str(e)}")
-            pg_cursor.execute("ROLLBACK")
-            # Continue with other tables even if one fails
-            continue
+            raise
+        
+    except Exception as e:
+        print(f"✗ Error reading or executing column additions: {e}")
+        logger.error(f"✗ Error reading or executing column additions: {e}", exc_info=True)
+        raise
     
     print("=" * 60)
-    print(f"COLUMN ADDITION COMPLETE: Added {columns_added_count} column(s) across {len(schema_update_map)} table(s)")
+    print("COLUMN ADDITION COMPLETE")
     print("=" * 60 + "\n")
     logger.info("=" * 60)
-    logger.info(f"New columns addition complete. Added {columns_added_count} column(s) across {len(schema_update_map)} table(s).")
+    logger.info("Column additions complete")
     logger.info("=" * 60)
-    
-    # Update the schema definition file
-    if schema_update_map:
-        print("Updating schema definition file...")
-        logger.info("Updating schema definition file...")
-        update_schema_definition(schema_update_map)
-    else:
-        print("WARNING: No columns were added, skipping schema definition update")
-        logger.warning("No columns were added, skipping schema definition update")
-
 
