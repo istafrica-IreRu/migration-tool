@@ -89,6 +89,9 @@ def add_new_columns_to_tables(pg_cursor: psycopg2.extensions.cursor) -> None:
     Args:
         pg_cursor: PostgreSQL database cursor
     """
+    print("\n" + "=" * 60)
+    print("PHASE 3.5: ADDING NEW COLUMNS TO MIGRATED TABLES")
+    print("=" * 60)
     logger.info("=" * 60)
     logger.info("--- Phase 3.5: Adding New Columns to Migrated Tables ---")
     logger.info("=" * 60)
@@ -107,6 +110,7 @@ def add_new_columns_to_tables(pg_cursor: psycopg2.extensions.cursor) -> None:
         # ],
     }
     
+    print(f"Processing {len(NEW_COLUMNS)} table(s) for column additions")
     logger.info(f"Processing {len(NEW_COLUMNS)} table(s) for column additions")
     
     # Map for schema definition update (table name without schema prefix)
@@ -114,6 +118,8 @@ def add_new_columns_to_tables(pg_cursor: psycopg2.extensions.cursor) -> None:
     columns_added_count = 0
     
     for table_key, columns in NEW_COLUMNS.items():
+        print(f"\nProcessing table: {table_key}")
+        print(f"  Columns to add: {len(columns)}")
         logger.info(f"Processing table: {table_key}")
         logger.info(f"  Columns to add: {len(columns)}")
         
@@ -127,32 +133,49 @@ def add_new_columns_to_tables(pg_cursor: psycopg2.extensions.cursor) -> None:
                 ADD COLUMN IF NOT EXISTS "{column_name}" {data_type};
                 '''
                 
+                print(f"  Adding column '{column_name}' ({data_type}) to {table_key}")
                 logger.info(f"  Adding column '{column_name}' ({data_type}) to {table_key}")
-                pg_cursor.execute(alter_sql)
-                columns_added_count += 1
-                logger.info(f"  ✓ Column '{column_name}' added successfully")
+                
+                try:
+                    pg_cursor.execute(alter_sql)
+                    columns_added_count += 1
+                    print(f"  ✓ Column '{column_name}' added successfully")
+                    logger.info(f"  ✓ Column '{column_name}' added successfully")
+                except Exception as col_error:
+                    print(f"  ✗ Error adding column '{column_name}': {col_error}")
+                    logger.error(f"  ✗ Error adding column '{column_name}': {col_error}")
+                    raise
             
             # Extract table name for schema definition update
             # Remove schema prefix and quotes: 'public."ApplicantTable"' -> 'ApplicantTable'
             table_name = table_key.split('.')[-1].strip('"')
             schema_update_map[table_name] = columns
+            print(f"✓ Completed processing table: {table_key}")
             logger.info(f"✓ Completed processing table: {table_key}")
                 
         except psycopg2.Error as e:
+            print(f"✗ Error adding columns to {table_key}: {e}")
+            print(f"  Error details: {type(e).__name__}: {str(e)}")
             logger.error(f"✗ Error adding columns to {table_key}: {e}")
             logger.error(f"  Error details: {type(e).__name__}: {str(e)}")
             pg_cursor.execute("ROLLBACK")
             # Continue with other tables even if one fails
             continue
     
+    print("=" * 60)
+    print(f"COLUMN ADDITION COMPLETE: Added {columns_added_count} column(s) across {len(schema_update_map)} table(s)")
+    print("=" * 60 + "\n")
     logger.info("=" * 60)
     logger.info(f"New columns addition complete. Added {columns_added_count} column(s) across {len(schema_update_map)} table(s).")
     logger.info("=" * 60)
     
     # Update the schema definition file
     if schema_update_map:
+        print("Updating schema definition file...")
         logger.info("Updating schema definition file...")
         update_schema_definition(schema_update_map)
     else:
+        print("WARNING: No columns were added, skipping schema definition update")
         logger.warning("No columns were added, skipping schema definition update")
+
 
