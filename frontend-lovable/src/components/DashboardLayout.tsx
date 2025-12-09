@@ -114,10 +114,5 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         </SidebarProvider>
     );
 };
-<div className="flex flex-1 flex-col gap-4 p-4 md:p-6">{children}</div>
-            </SidebarInset >
-        </SidebarProvider >
-    );
-};
 
 export default DashboardLayout;
