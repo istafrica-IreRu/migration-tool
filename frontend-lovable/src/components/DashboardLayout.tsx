@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
-import { Database, GitBranch } from "lucide-react";
+import { Database, GitBranch, Settings } from "lucide-react";
+import { useState } from "react";
 import {
     Sidebar,
     SidebarContent,
@@ -15,6 +16,8 @@ import {
     SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import ConnectionDialog from "./ConnectionDialog";
 
 interface DashboardLayoutProps {
     children: React.ReactNode;
@@ -22,6 +25,7 @@ interface DashboardLayoutProps {
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     const location = useLocation();
+    const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
 
     const navItems = [
         {
@@ -85,16 +89,34 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4">
                     <SidebarTrigger className="-ml-1" />
                     <Separator orientation="vertical" className="mr-2 h-4" />
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-1">
                         <h2 className="text-lg font-semibold">
                             {navItems.find((item) => item.url === location.pathname)?.title ||
                                 "Dashboard"}
                         </h2>
                     </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setConnectionDialogOpen(true)}
+                    >
+                        <Settings className="h-4 w-4 mr-2" />
+                        Connection Settings
+                    </Button>
                 </header>
                 <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">{children}</div>
             </SidebarInset>
+
+            <ConnectionDialog
+                open={connectionDialogOpen}
+                onOpenChange={setConnectionDialogOpen}
+            />
         </SidebarProvider>
+    );
+};
+<div className="flex flex-1 flex-col gap-4 p-4 md:p-6">{children}</div>
+            </SidebarInset >
+        </SidebarProvider >
     );
 };
 

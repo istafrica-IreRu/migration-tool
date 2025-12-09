@@ -3,7 +3,7 @@ Configuration management for the migration script.
 Loads settings from environment variables and provides validation.
 """
 import os
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 from dotenv import load_dotenv
 import logging
@@ -69,31 +69,34 @@ class MigrationConfig:
 class Config:
     """Main configuration class that loads and validates all settings."""
 
-    def __init__(self):
-        """Initialize configuration from environment variables."""
+    def __init__(self, overrides: Optional[Dict[str, Any]] = None):
+        """Initialize configuration from environment variables with optional overrides."""
+        self.overrides = overrides or {}
         self.mssql = self._load_mssql_config()
         self.postgresql = self._load_postgresql_config()
         self.migration = self._load_migration_config()
         self._validate()
 
     def _load_mssql_config(self) -> MSSQLConfig:
-        """Load MSSQL configuration from environment."""
+        """Load MSSQL configuration from environment or overrides."""
+        mssql_overrides = self.overrides.get('mssql', {})
         return MSSQLConfig(
-            server=os.getenv('MSSQL_SERVER', 'localhost'),
-            database=os.getenv('MSSQL_DATABASE', 'wsdata'),
-            username=os.getenv('MSSQL_USERNAME', ''),
-            password=os.getenv('MSSQL_PASSWORD', ''),
-            trusted_connection=os.getenv('MSSQL_TRUSTED_CONNECTION', 'false').lower() == 'true'
+            server=mssql_overrides.get('server') or os.getenv('MSSQL_SERVER', 'localhost'),
+            database=mssql_overrides.get('database') or os.getenv('MSSQL_DATABASE', 'wsdata'),
+            username=mssql_overrides.get('username') or os.getenv('MSSQL_USERNAME', ''),
+            password=mssql_overrides.get('password') or os.getenv('MSSQL_PASSWORD', ''),
+            trusted_connection=mssql_overrides.get('trusted_connection') or os.getenv('MSSQL_TRUSTED_CONNECTION', 'false').lower() == 'true'
         )
 
     def _load_postgresql_config(self) -> PostgreSQLConfig:
-        """Load PostgreSQL configuration from environment."""
+        """Load PostgreSQL configuration from environment or overrides."""
+        pg_overrides = self.overrides.get('postgresql', {})
         return PostgreSQLConfig(
-            host=os.getenv('PG_HOST', 'localhost'),
-            database=os.getenv('PG_DATABASE', 'wsdata_v4'),
-            user=os.getenv('PG_USER', 'postgres'),
-            password=os.getenv('PG_PASSWORD', ''),
-            port=os.getenv('PG_PORT', '5432')
+            host=pg_overrides.get('host') or os.getenv('PG_HOST', 'localhost'),
+            database=pg_overrides.get('database') or os.getenv('PG_DATABASE', 'wsdata_v4'),
+            user=pg_overrides.get('user') or os.getenv('PG_USER', 'postgres'),
+            password=pg_overrides.get('password') or os.getenv('PG_PASSWORD', ''),
+            port=pg_overrides.get('port') or os.getenv('PG_PORT', '5432')
         )
 
     def _load_migration_config(self) -> MigrationConfig:
@@ -105,6 +108,7 @@ class Config:
             schemas_to_migrate=schemas,
             config_profile=os.getenv('CONFIG_PROFILE', 'dev')
         )
+
 
     def _validate(self) -> None:
         """Validate configuration settings."""
@@ -167,9 +171,9 @@ Configuration Summary:
 """
 
 
-def load_config() -> Config:
+def load_config(overrides: Optional[Dict[str, Any]] = None) -> Config:
     """
     Load and return the configuration.
     This is the main entry point for getting configuration.
     """
-    return Config()
+    return Config(overrides)

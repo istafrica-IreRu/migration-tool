@@ -58,18 +58,21 @@ migration_state = {
 
 migration_thread: Optional[threading.Thread] = None
 TRANSLATION_DICT: Dict[str, str] = {}
+runtime_config: Optional[Dict[str, Any]] = None
 
 
 def get_configured_mssql_connection():
-    """Get MSSQL connection using config."""
+    """Get MSSQL connection using config (env or runtime)."""
     try:
-        config = load_config()
+        config = load_config(runtime_config)
         return pyodbc.connect(config.mssql.get_connection_string())
     except Exception as e:
         logging.error(f"Error connecting to MSSQL via config: {e}")
-        # Fallback to main.py's function if config fails (though it likely won't work if trusted auth is needed)
-        from main import get_mssql_connection
-        return get_mssql_connection()
+        # Fallback only if no runtime config is present
+        if not runtime_config:
+            from main import get_mssql_connection
+            return get_mssql_connection()
+        raise
 
 
 def emit_progress(phase: str, message: str, progress: int = None, table: str = None):
@@ -125,34 +128,52 @@ class MigrationLogger:
         emit_progress(migration_state['current_phase'], f"Warning: {message}")
 
 
-def run_migration(selected_tables: List[str], translations_file: str, normalize: bool = False):
-    """Run migration in a separate thread."""
+def run_migration(selected_tables: List[str], translations_file: str = None, normalize: bool = False):
+    """Run the full migration process."""
     global migration_state, TRANSLATION_DICT
     
-    # Import main module functions
-    import main as migration_main
+    # Initialize connections
+    mssql_conn = None
+    pg_conn = None
     
     try:
         migration_state['status'] = 'running'
         migration_state['progress'] = 0
         migration_state['error'] = None
-        migration_state['selected_tables'] = selected_tables
         
-        # Load config and update main module globals
-        config = load_config()
-        migration_main.MSSQL_SERVER = config.mssql.server
-        migration_main.MSSQL_DATABASE = config.mssql.database
-        migration_main.MSSQL_USERNAME = config.mssql.username
-        migration_main.MSSQL_PASSWORD = config.mssql.password
-        migration_main.PG_HOST = config.postgresql.host
-        migration_main.PG_DATABASE = config.postgresql.database
-        migration_main.PG_USER = config.postgresql.user
-        migration_main.PG_PASSWORD = config.postgresql.password
-        migration_main.PG_PORT = config.postgresql.port
+        # Load translation dict if file provided
+        if translations_file:
+            # TODO: Implement loading from file path/content
+            pass
+            
+        emit_progress('init', 'Initializing connections...', 5)
+        
+        # Connect to databases using configured settings
+        config = load_config(runtime_config)
+        
+        try:
+            mssql_conn = pyodbc.connect(config.mssql.get_connection_string())
+        except Exception as e:
+            raise Exception(f"Failed to connect to MSSQL: {e}")
+            
+        try:
+            pg_conn = psycopg2.connect(**config.postgresql.get_connection_params())
+        except Exception as e:
+            raise Exception(f"Failed to connect to PostgreSQL: {e}")
+            
+        mssql_cursor = mssql_conn.cursor()
+        pg_cursor = pg_conn.cursor()
+        
+        # Initialize translation dictionary
+        if translations_file and os.path.exists(translations_file):
+            migration_main.TRANSLATION_DICT = load_translation_dict(translations_file)
+        
+        # Phase 0: Metadata
+        emit_progress('metadata', 'Reading source metadata...', 10)
+        
+        # Update SCHEMAS_TO_MIGRATE in main module to match config
+        # This is important because many functions in main.py rely on this global variable
         migration_main.SCHEMAS_TO_MIGRATE = config.migration.schemas_to_migrate
-        
-        # Set global translation dict in main module
-        migration_main.TRANSLATION_DICT = load_translation_dict(translations_file)
         TRANSLATION_DICT = migration_main.TRANSLATION_DICT
         
         # Update translate_identifier to use the loaded dict
