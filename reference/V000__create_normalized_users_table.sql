@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS "Nr_Users" (
     "Country" CHARACTER VARYING(50),
     "SchoolID" CHARACTER VARYING(10),
     "TenantID" SMALLINT,
+    "Nr_AddressID" INTEGER,                              -- Foreign Key to Nr_Addresses table (relationship reversed)
     "GlobalUID" UUID,
     "LastModified" TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "Nr_Users_pkey" PRIMARY KEY ("UserID")
@@ -68,6 +69,7 @@ CREATE INDEX IF NOT EXISTS "idx_Nr_Users_LastName" ON "Nr_Users"("LastName");
 CREATE INDEX IF NOT EXISTS "idx_Nr_Users_FirstName" ON "Nr_Users"("FirstName");
 CREATE INDEX IF NOT EXISTS "idx_Nr_Users_SchoolID" ON "Nr_Users"("SchoolID");
 CREATE INDEX IF NOT EXISTS "idx_Nr_Users_TenantID" ON "Nr_Users"("TenantID");
+CREATE INDEX IF NOT EXISTS "idx_Nr_Users_Nr_AddressID" ON "Nr_Users"("Nr_AddressID");
 
 -- Add table and column comments
 COMMENT ON TABLE "Nr_Users" IS 'Base reference table for personal information. Contains data for students, teachers, guardians, and applicants. Referenced by Nr_Students, Nr_Teachers, Nr_Guardians, and Nr_Applicants.';
@@ -92,7 +94,82 @@ COMMENT ON COLUMN "Nr_Users"."PostalCode" IS 'Postal/ZIP code';
 COMMENT ON COLUMN "Nr_Users"."Country" IS 'Country of residence';
 COMMENT ON COLUMN "Nr_Users"."SchoolID" IS 'School identifier for multi-school systems';
 COMMENT ON COLUMN "Nr_Users"."TenantID" IS 'Tenant identifier for multi-tenant systems';
+COMMENT ON COLUMN "Nr_Users"."Nr_AddressID" IS 'Foreign key to Nr_Addresses table (relationship reversed: user references address)';
 COMMENT ON COLUMN "Nr_Users"."GlobalUID" IS 'Global unique identifier (UUID)';
 COMMENT ON COLUMN "Nr_Users"."LastModified" IS 'Timestamp of last modification';
+
+-- ============================================================================
+-- Phase 2: Create Nr_Addresses Table (Normalized Address Table)
+-- ============================================================================
+
+-- This table contains normalized address information for all users (students, teachers, guardians, applicants)
+-- Relationship is reversed: Nr_Users has Nr_AddressID that references this table
+
+CREATE TABLE IF NOT EXISTS "Nr_Addresses" (
+    "ID" INTEGER NOT NULL,
+    "Street" CHARACTER VARYING(120),
+    "PostalCode" CHARACTER VARYING(10),
+    "City" CHARACTER VARYING(40),
+    "Subdistrict" CHARACTER VARYING(50),
+    "State" CHARACTER VARYING(3),
+    "Country" CHARACTER VARYING(4),
+    "CountryOfAddress" CHARACTER VARYING(255),
+    "CountryOfBirth" CHARACTER VARYING(30),
+    "Country1" CHARACTER VARYING(255),
+    "Country2" CHARACTER VARYING(255),
+    "IsForeignAddress" SMALLINT,
+    "AddressType" CHARACTER VARYING(20),
+    "IsValidated" SMALLINT,
+    "ValidationDate" TIMESTAMP WITHOUT TIME ZONE,
+    "Tenant" SMALLINT,
+    "CreatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    "UpdatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Nr_Addresses_pkey" PRIMARY KEY ("ID")
+);
+
+-- Create sequence for Nr_Addresses
+CREATE SEQUENCE IF NOT EXISTS "Nr_Addresses_ID_seq"
+    AS INTEGER
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+ALTER TABLE "Nr_Addresses" ALTER COLUMN "ID" SET DEFAULT nextval('"Nr_Addresses_ID_seq"');
+ALTER SEQUENCE "Nr_Addresses_ID_seq" OWNED BY "Nr_Addresses"."ID";
+
+-- Create indexes for common queries
+CREATE INDEX IF NOT EXISTS "idx_Nr_Addresses_PostalCode" ON "Nr_Addresses"("PostalCode");
+CREATE INDEX IF NOT EXISTS "idx_Nr_Addresses_City" ON "Nr_Addresses"("City");
+CREATE INDEX IF NOT EXISTS "idx_Nr_Addresses_Country" ON "Nr_Addresses"("Country");
+CREATE INDEX IF NOT EXISTS "idx_Nr_Addresses_AddressType" ON "Nr_Addresses"("AddressType");
+CREATE INDEX IF NOT EXISTS "idx_Nr_Addresses_Tenant" ON "Nr_Addresses"("Tenant");
+
+-- Add table and column comments
+COMMENT ON TABLE "Nr_Addresses" IS 'Normalized address table (3NF compliant). Centralized address management for all users (students, teachers, guardians, applicants). Relationship reversed: Nr_Users has Nr_AddressID that references this table.';
+COMMENT ON COLUMN "Nr_Addresses"."ID" IS 'Primary key - unique identifier for each address';
+COMMENT ON COLUMN "Nr_Addresses"."Street" IS 'Street address';
+COMMENT ON COLUMN "Nr_Addresses"."PostalCode" IS 'Postal/ZIP code';
+COMMENT ON COLUMN "Nr_Addresses"."City" IS 'City of residence (maps to Residence in legacy tables)';
+COMMENT ON COLUMN "Nr_Addresses"."Subdistrict" IS 'Subdistrict/Borough';
+COMMENT ON COLUMN "Nr_Addresses"."State" IS 'State/Province code';
+COMMENT ON COLUMN "Nr_Addresses"."Country" IS 'Country of residence';
+COMMENT ON COLUMN "Nr_Addresses"."CountryOfAddress" IS 'Country of address (if different from residence)';
+COMMENT ON COLUMN "Nr_Addresses"."CountryOfBirth" IS 'Country of birth';
+COMMENT ON COLUMN "Nr_Addresses"."Country1" IS 'Additional citizenship country (supports dual/multiple citizenship)';
+COMMENT ON COLUMN "Nr_Addresses"."Country2" IS 'Additional citizenship country (supports dual/multiple citizenship)';
+COMMENT ON COLUMN "Nr_Addresses"."IsForeignAddress" IS 'Flag indicating if address is foreign';
+COMMENT ON COLUMN "Nr_Addresses"."AddressType" IS 'Type of address (e.g., APPLICANT, GUARDIAN, STUDENT, TEACHER)';
+COMMENT ON COLUMN "Nr_Addresses"."IsValidated" IS 'Flag indicating if address has been verified/geocoded';
+COMMENT ON COLUMN "Nr_Addresses"."ValidationDate" IS 'Date when address was validated';
+COMMENT ON COLUMN "Nr_Addresses"."Tenant" IS 'Tenant identifier for multi-tenant systems';
+COMMENT ON COLUMN "Nr_Addresses"."CreatedAt" IS 'Timestamp of creation';
+COMMENT ON COLUMN "Nr_Addresses"."UpdatedAt" IS 'Timestamp of last modification';
+
+-- Create foreign key from Nr_Users to Nr_Addresses
+ALTER TABLE "Nr_Users"
+    ADD CONSTRAINT "Nr_Users_Nr_AddressID_fkey" 
+    FOREIGN KEY ("Nr_AddressID") REFERENCES "Nr_Addresses"("ID");
 
 -- Note: Flyway automatically commits the transaction

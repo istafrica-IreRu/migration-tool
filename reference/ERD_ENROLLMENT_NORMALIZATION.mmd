@@ -1,0 +1,236 @@
+---
+title: IST-WinSchool Enrollment Module - Normalized ERD
+description: Entity Relationship Diagram for Enrollment Module (3NF Normalized)
+---
+
+erDiagram
+    %% =============================================================================
+    %% SECTION 1: USER AND ADDRESS TABLES (Shared with Student Module)
+    %% =============================================================================
+    
+    Nr_Users {
+        integer UserID PK
+        varchar LoginName
+        varchar FirstName
+        varchar LastName
+        varchar Email
+        varchar Phone
+        varchar Mobile
+        varchar Fax
+        smallint TenantID
+        varchar SchoolID
+        integer Nr_AddressID FK
+        uuid GlobalUID
+        timestamp LastModified
+    }
+    
+    Nr_Addresses {
+        integer ID PK
+        varchar Street
+        varchar PostalCode
+        varchar City
+        varchar Subdistrict
+        varchar State
+        varchar Country
+        varchar CountryOfAddress
+        varchar CountryOfBirth
+        varchar Country1
+        varchar Country2
+        smallint IsForeignAddress
+        varchar AddressType
+        smallint IsValidated
+        timestamp ValidationDate
+        smallint Tenant
+        timestamp CreatedAt
+        timestamp UpdatedAt
+    }
+    
+    %% =============================================================================
+    %% SECTION 2: APPLICANT NORMALIZATION
+    %% =============================================================================
+    
+    Nr_Applicants {
+        integer Nr_ApplicantID PK
+        integer Nr_UserID FK
+        smallint Disability
+        varchar MotherTongue
+        uuid GUID
+        bytea Timestamp
+    }
+    
+    Nr_ApplicantApplicationInfo {
+        integer Nr_ApplicationInfoID PK
+        integer Nr_ApplicantID FK
+        varchar Class
+        varchar TrainingCompany
+        varchar FormSuffix
+        smallint GuestStudent
+        timestamp AdmissionDate
+        smallint CompanyLock
+    }
+    
+    %% =============================================================================
+    %% SECTION 3: GUARDIAN NORMALIZATION
+    %% =============================================================================
+    
+    Nr_ApplicantGuardians {
+        integer Nr_GuardianID PK
+        integer Nr_ApplicantID FK
+        integer Nr_UserID FK
+        integer StudentNumber
+        smallint Category
+        smallint Priority
+        varchar Salutation
+        varchar LetterSalutation
+        varchar Title
+        varchar Addition
+        varchar Profession
+        varchar Denomination
+        varchar CountryOfBirth
+        smallint GuardianshipAuthorized
+        smallint CustodyAuthorized
+        smallint SameHousehold
+        smallint CompanyCarrier
+        varchar FamilyCode
+        varchar Remark
+        varchar Phone2
+        varchar MobileNumber2
+        uuid GUID
+        uuid XmoodID
+        uuid GlobalUID
+        smallint RegistrationX
+        varchar RegistrationName
+        bytea Timestamp
+    }
+    
+    Nr_ApplicantGuardianFinance {
+        integer Nr_GuardianFinanceID PK
+        integer Nr_GuardianID FK
+        varchar FinancialInstitution
+        varchar BankCode
+        varchar AccountNumber
+        varchar DebtorNumber
+        varchar Company
+    }
+    
+    %% =============================================================================
+    %% SECTION 4: APPLICANT PROCEDURE DATA NORMALIZATION
+    %% =============================================================================
+    
+    Nr_ApplicantProcedureData {
+        integer Nr_ProcedureDataID PK
+        integer Nr_ApplicantID FK
+        integer ProcedureNumber FK
+        varchar GradeAverage
+        smallint DocumentsComplete
+        smallint ApplicationRejected
+        smallint ApplicationWaitlist
+        smallint SelectionAccepted
+        smallint CurrentApplicant
+        timestamp ConfirmationSentOn
+        varchar Remark
+        uuid GUID
+        timestamp PortalLastChange
+        smallint Withdrawn
+        timestamp ApplicationRegistration
+        smallint IsDraft
+    }
+    
+    Nr_ApplicantDocuments {
+        integer Nr_DocumentID PK
+        integer Nr_ApplicantID FK
+        integer ProcedureNumber FK
+        varchar Description
+        varchar ProcedureGroup
+        uuid GUID
+        bytea Timestamp
+    }
+    
+    Nr_ApplicantPerformance {
+        integer Nr_PerformanceID PK
+        integer Nr_ApplicantID FK
+        integer ProcedureNumber FK
+        smallint Position
+        varchar Subject
+        varchar Grade
+        uuid GUID
+        smallint Tenant
+        bytea Timestamp
+    }
+    
+    %% =============================================================================
+    %% SECTION 5: PROCEDURE CONFIGURATION NORMALIZATION
+    %% =============================================================================
+    
+    Nr_ApplicantProcedure {
+        integer Nr_ProcedureID PK
+        timestamp From
+        timestamp To
+        varchar Description
+        text Description_1
+        uuid GUID
+        smallint Tenant
+        bytea Timestamp
+        varchar SchoolID
+        smallint Status
+        smallint IsDraft
+        varchar GradingScale
+        integer AgeLimit
+    }
+    
+    Nr_ApplicantProcedureDocuments {
+        integer Nr_ProcedureDocumentID PK
+        integer ProcedureNumber FK
+        varchar ProcedureGroup
+        smallint Mandatory
+        smallint Tenant
+    }
+    
+    Nr_ApplicantProcedureFieldsConfig {
+        integer Nr_FieldsConfigID PK
+        integer ApplicantProcedureNumber FK
+        varchar FieldName
+        varchar DisplayName
+        smallint ConstraintValue
+        smallint Required
+        varchar DefaultValue
+        varchar Category
+        smallint Tenant
+        integer TableNumber
+        smallint Position
+    }
+    
+    Nr_ApplicantProcedureSubjects {
+        integer Nr_ProcedureSubjectID PK
+        integer ProcedureNumber FK
+        integer SubjectNumber
+        smallint Tenant
+    }
+    
+    %% =============================================================================
+    %% RELATIONSHIPS
+    %% =============================================================================
+    
+    %% USER MODULE (Shared)
+    Nr_Users ||--o{ Nr_Applicants : "has"
+    Nr_Users ||--o{ Nr_ApplicantGuardians : "has"
+    Nr_Users }o--|| Nr_Addresses : "references"
+    
+    %% APPLICANT MODULE
+    Nr_Applicants ||--|| Nr_ApplicantApplicationInfo : "has"
+    Nr_Applicants ||--o{ Nr_ApplicantGuardians : "has"
+    Nr_Applicants ||--o{ Nr_ApplicantProcedureData : "has"
+    Nr_Applicants ||--o{ Nr_ApplicantDocuments : "has"
+    Nr_Applicants ||--o{ Nr_ApplicantPerformance : "has"
+    
+    %% GUARDIAN MODULE
+    Nr_ApplicantGuardians ||--|| Nr_ApplicantGuardianFinance : "has"
+    
+    %% PROCEDURE CONFIGURATION
+    Nr_ApplicantProcedure ||--o{ Nr_ApplicantProcedureDocuments : "has"
+    Nr_ApplicantProcedure ||--o{ Nr_ApplicantProcedureFieldsConfig : "has"
+    Nr_ApplicantProcedure ||--o{ Nr_ApplicantProcedureSubjects : "has"
+    Nr_ApplicantProcedure ||--o{ Nr_ApplicantProcedureData : "references"
+    Nr_ApplicantProcedure ||--o{ Nr_ApplicantDocuments : "references"
+    Nr_ApplicantProcedure ||--o{ Nr_ApplicantPerformance : "references"
+

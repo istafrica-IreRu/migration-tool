@@ -11,14 +11,17 @@
 -- ============================================================================
 
 -- Create Nr_Guardians table (Guardian identity - ONE per person)
+-- Note: Portal registration data (RegistrationX, RegistrationName) is now directly in this table
 CREATE TABLE IF NOT EXISTS "Nr_Guardians" (
     "Nr_GuardianID" INTEGER NOT NULL,
-    "Nr_UserID" INTEGER,
+    "Nr_UserID" INTEGER NOT NULL,
     "GlobalUID" UUID,
     "XmoodID" UUID,
     "Salutation" CHARACTER VARYING(50),
     "Title" CHARACTER VARYING(20),
     "LetterSalutation" CHARACTER VARYING(50),
+    "RegistrationX" SMALLINT,
+    "RegistrationName" CHARACTER VARYING(20),
     "Timestamp" BYTEA NOT NULL,
     CONSTRAINT "Nr_Guardians_pkey" PRIMARY KEY ("Nr_GuardianID")
 );
@@ -38,21 +41,25 @@ ALTER SEQUENCE "Nr_Guardians_Nr_GuardianID_seq" OWNED BY "Nr_Guardians"."Nr_Guar
 -- Create foreign key to Nr_Users
 ALTER TABLE "Nr_Guardians"
     ADD CONSTRAINT "Nr_Guardians_Nr_UserID_fkey"
-    FOREIGN KEY ("Nr_UserID") REFERENCES "Nr_Users"("UserID") ON DELETE SET NULL;
+    FOREIGN KEY ("Nr_UserID") REFERENCES "Nr_Users"("UserID") ON DELETE RESTRICT;
 
 -- Create indexes
 CREATE UNIQUE INDEX IF NOT EXISTS "idx_Nr_Guardians_GlobalUID" ON "Nr_Guardians"("GlobalUID") WHERE "GlobalUID" IS NOT NULL;
 -- Note: XmoodID is NOT unique in source data - multiple guardians can have same XmoodID
 CREATE INDEX IF NOT EXISTS "idx_Nr_Guardians_XmoodID" ON "Nr_Guardians"("XmoodID") WHERE "XmoodID" IS NOT NULL;
 CREATE INDEX IF NOT EXISTS "idx_Nr_Guardians_Nr_UserID" ON "Nr_Guardians"("Nr_UserID");
+CREATE UNIQUE INDEX IF NOT EXISTS "uq_Nr_Guardians_RegistrationName" ON "Nr_Guardians"("RegistrationName")
+    WHERE "RegistrationName" IS NOT NULL;
 -- Note: Tenant is obtained from Nr_Users."TenantID" via join, not stored in Nr_Guardians
 
 -- Add table comment
-COMMENT ON TABLE "Nr_Guardians" IS 'Guardian identity - ONE record per person. Does not contain student relationships (see Nr_StudentGuardians junction table). Tenant is obtained from linked Nr_Users."TenantID" via join.';
-COMMENT ON COLUMN "Nr_Guardians"."Nr_UserID" IS 'Nullable reference to Nr_Users - guardian may not have user account. Primary contact (Email, Phone, Mobile, Fax) and TenantID should be in Nr_Users.';
+COMMENT ON TABLE "Nr_Guardians" IS 'Guardian identity - ONE record per person. Does not contain student relationships (see Nr_StudentGuardians junction table). Tenant is obtained from linked Nr_Users."TenantID" via join. Portal registration data (RegistrationX, RegistrationName) is stored directly in this table.';
+COMMENT ON COLUMN "Nr_Guardians"."Nr_UserID" IS 'Required reference to Nr_Users - guardian must have user account. Primary contact (Email, Phone, Mobile, Fax) and TenantID are in Nr_Users.';
 COMMENT ON COLUMN "Nr_Guardians"."Salutation" IS 'Guardian salutation (e.g., Mr., Mrs., Ms., Dr.)';
 COMMENT ON COLUMN "Nr_Guardians"."Title" IS 'Guardian title (e.g., Prof., Eng., etc.)';
 COMMENT ON COLUMN "Nr_Guardians"."LetterSalutation" IS 'Formal salutation for letters and official correspondence';
+COMMENT ON COLUMN "Nr_Guardians"."RegistrationX" IS 'Portal registration flag/status. Password is stored in Nr_Users table, not here.';
+COMMENT ON COLUMN "Nr_Guardians"."RegistrationName" IS 'Portal login username - must be unique. Password is stored in Nr_Users table, not here.';
 
 -- ============================================================================
 -- Phase 2: Create Nr_StudentGuardians (Junction Table - Many-to-Many)
@@ -120,45 +127,7 @@ COMMENT ON COLUMN "Nr_StudentGuardians"."Priority" IS 'Contact priority order: 1
 -- Phase 3: Create Supporting Guardian Tables
 -- ============================================================================
 
--- Create Nr_GuardianAddress table
-CREATE TABLE IF NOT EXISTS "Nr_GuardianAddress" (
-    "Nr_GuardianAddressID" INTEGER NOT NULL,
-    "Nr_GuardianID" INTEGER NOT NULL,
-    "Street" CHARACTER VARYING(60),
-    "PostalCode" CHARACTER VARYING(10),
-    "Residence" CHARACTER VARYING(40),
-    "Subdistrict" CHARACTER VARYING(50),
-    "State" CHARACTER VARYING(3),
-    "Country" CHARACTER VARYING(30),
-    "CountryOfBirth" CHARACTER VARYING(30),
-    "Country1" CHARACTER VARYING(30),
-    "Country2" CHARACTER VARYING(30),
-    CONSTRAINT "Nr_GuardianAddress_pkey" PRIMARY KEY ("Nr_GuardianAddressID")
-);
-
--- Create sequence for Nr_GuardianAddress
-CREATE SEQUENCE IF NOT EXISTS "Nr_GuardianAddress_Nr_GuardianAddressID_seq"
-    AS INTEGER
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-ALTER TABLE "Nr_GuardianAddress" ALTER COLUMN "Nr_GuardianAddressID" SET DEFAULT nextval('"Nr_GuardianAddress_Nr_GuardianAddressID_seq"');
-ALTER SEQUENCE "Nr_GuardianAddress_Nr_GuardianAddressID_seq" OWNED BY "Nr_GuardianAddress"."Nr_GuardianAddressID";
-
--- Create foreign key to Nr_Guardians
-ALTER TABLE "Nr_GuardianAddress"
-    ADD CONSTRAINT "Nr_GuardianAddress_Nr_GuardianID_fkey"
-    FOREIGN KEY ("Nr_GuardianID") REFERENCES "Nr_Guardians"("Nr_GuardianID") ON DELETE CASCADE;
-
--- Create unique index (one address per guardian)
-CREATE UNIQUE INDEX IF NOT EXISTS "uq_Nr_GuardianAddress_GuardianID" ON "Nr_GuardianAddress"("Nr_GuardianID");
-CREATE INDEX IF NOT EXISTS "idx_Nr_GuardianAddress_PostalCode" ON "Nr_GuardianAddress"("PostalCode");
-CREATE INDEX IF NOT EXISTS "idx_Nr_GuardianAddress_Country" ON "Nr_GuardianAddress"("Country");
-
-COMMENT ON TABLE "Nr_GuardianAddress" IS 'Guardian address data - ONE per guardian, shared across all their children';
+-- Note: Nr_GuardianAddress table removed - addresses are now stored in Nr_Addresses table (User module)
 
 -- Create Nr_GuardianContact table (SECONDARY contact methods only)
 CREATE TABLE IF NOT EXISTS "Nr_GuardianContact" (
@@ -260,39 +229,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "uq_Nr_GuardianEmployment_GuardianID" ON "Nr_G
 
 COMMENT ON TABLE "Nr_GuardianEmployment" IS 'Guardian employment data - ONE per guardian, shared across all their children';
 
--- Create Nr_GuardianPortal table (Security Sensitive)
--- Note: Password is stored in Nr_Users table, not here
-CREATE TABLE IF NOT EXISTS "Nr_GuardianPortal" (
-    "Nr_GuardianPortalID" INTEGER NOT NULL,
-    "Nr_GuardianID" INTEGER NOT NULL,
-    "RegistrationX" SMALLINT,
-    "RegistrationName" CHARACTER VARYING(20),
-    CONSTRAINT "Nr_GuardianPortal_pkey" PRIMARY KEY ("Nr_GuardianPortalID")
-);
-
--- Create sequence for Nr_GuardianPortal
-CREATE SEQUENCE IF NOT EXISTS "Nr_GuardianPortal_Nr_GuardianPortalID_seq"
-    AS INTEGER
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-ALTER TABLE "Nr_GuardianPortal" ALTER COLUMN "Nr_GuardianPortalID" SET DEFAULT nextval('"Nr_GuardianPortal_Nr_GuardianPortalID_seq"');
-ALTER SEQUENCE "Nr_GuardianPortal_Nr_GuardianPortalID_seq" OWNED BY "Nr_GuardianPortal"."Nr_GuardianPortalID";
-
--- Create foreign key to Nr_Guardians
-ALTER TABLE "Nr_GuardianPortal"
-    ADD CONSTRAINT "Nr_GuardianPortal_Nr_GuardianID_fkey"
-    FOREIGN KEY ("Nr_GuardianID") REFERENCES "Nr_Guardians"("Nr_GuardianID") ON DELETE CASCADE;
-
--- Create unique index (one portal record per guardian)
-CREATE UNIQUE INDEX IF NOT EXISTS "uq_Nr_GuardianPortal_GuardianID" ON "Nr_GuardianPortal"("Nr_GuardianID");
-CREATE UNIQUE INDEX IF NOT EXISTS "uq_Nr_GuardianPortal_RegistrationName" ON "Nr_GuardianPortal"("RegistrationName")
-    WHERE "RegistrationName" IS NOT NULL;
-
-COMMENT ON TABLE "Nr_GuardianPortal" IS 'SECURITY SENSITIVE: Guardian portal registration data. Password is stored in Nr_Users table.';
+-- Note: Nr_GuardianPortal table removed - portal data is now directly in Nr_Guardians table
 
 -- ============================================================================
 -- Phase 4: Migrate Data from GuardianTable to Normalized Tables
@@ -302,33 +239,7 @@ COMMENT ON TABLE "Nr_GuardianPortal" IS 'SECURITY SENSITIVE: Guardian portal reg
 -- Guardians with multiple children will have ONE guardian identity record
 -- and MULTIPLE relationship records in Nr_StudentGuardians
 
--- Step 1: Migrate guardian identity (DEDUPLICATED by GlobalUID)
--- Note: Tenant is NOT migrated here - it will be obtained from Nr_Users."TenantID" via join
-INSERT INTO "Nr_Guardians" (
-    "Nr_UserID",
-    "GlobalUID",
-    "XmoodID",
-    "Salutation",
-    "Title",
-    "LetterSalutation",
-    "Timestamp"
-)
-SELECT DISTINCT ON (g."GlobalUID")
-    NULL AS "Nr_UserID",  -- Will be linked later after creating Nr_Users entries
-    g."GlobalUID",
-    g."XmoodID",
-    g."Salutation",
-    g."Title",
-    g."LetterSalutation",
-    g."Timestamp"
-FROM "GuardianTable" g
-WHERE g."GlobalUID" IS NOT NULL
-AND NOT EXISTS (
-    SELECT 1 FROM "Nr_Guardians" ng WHERE ng."GlobalUID" = g."GlobalUID"
-)
-ORDER BY g."GlobalUID", g."ID";
-
--- Step 2: Create Nr_Users entries with auto-generated LoginNames
+-- Step 1: Create Nr_Users entries with auto-generated LoginNames (MUST be done first since Nr_UserID is NOT NULL)
 -- LoginName format: <first_initial>.<lastname> (e.g., j.doe for John Doe)
 -- Handles duplicates by adding numbers: j.doe, j.doe2, j.doe3, etc.
 -- Primary contact data (Email, Phone, Mobile/MobileNumber, Fax) migrated here
@@ -407,9 +318,30 @@ AND NOT EXISTS (
 ORDER BY g."GlobalUID", g."ID"
 ON CONFLICT ("LoginName") WHERE "LoginName" IS NOT NULL DO NOTHING;
 
--- Step 3: Link Nr_Guardians to newly created Nr_Users
-UPDATE "Nr_Guardians" ng
-SET "Nr_UserID" = u."UserID"
+-- Step 2: Migrate guardian identity (DEDUPLICATED by GlobalUID) with UserID already set
+-- Note: Tenant is NOT migrated here - it will be obtained from Nr_Users."TenantID" via join
+-- Note: Portal registration data (RegistrationX, RegistrationName) is now migrated directly here
+INSERT INTO "Nr_Guardians" (
+    "Nr_UserID",
+    "GlobalUID",
+    "XmoodID",
+    "Salutation",
+    "Title",
+    "LetterSalutation",
+    "RegistrationX",
+    "RegistrationName",
+    "Timestamp"
+)
+SELECT DISTINCT ON (g."GlobalUID")
+    u."UserID" AS "Nr_UserID",  -- Link to User created in Step 1
+    g."GlobalUID",
+    g."XmoodID",
+    g."Salutation",
+    g."Title",
+    g."LetterSalutation",
+    g."RegistrationX",  -- Portal registration data now directly in Nr_Guardians
+    g."RegistrationName",  -- Portal registration data now directly in Nr_Guardians
+    g."Timestamp"
 FROM "GuardianTable" g
 INNER JOIN "Nr_Users" u ON (
     u."FirstName" = g."FirstName"
@@ -417,13 +349,18 @@ INNER JOIN "Nr_Users" u ON (
     AND u."TenantID" = g."Tenant"
     AND (u."Email" = g."Email" OR (u."Email" IS NULL AND g."Email" IS NULL))
 )
-WHERE ng."GlobalUID" = g."GlobalUID"
-AND ng."Nr_UserID" IS NULL;
+WHERE g."GlobalUID" IS NOT NULL
+AND g."Name" IS NOT NULL AND g."Name" != ''
+AND g."FirstName" IS NOT NULL AND g."FirstName" != ''
+AND NOT EXISTS (
+    SELECT 1 FROM "Nr_Guardians" ng WHERE ng."GlobalUID" = g."GlobalUID"
+)
+ORDER BY g."GlobalUID", g."ID";
 
 -- Clean up temporary function
 DROP FUNCTION IF EXISTS generate_unique_loginname(VARCHAR, VARCHAR);
 
--- Step 4: Migrate relationship records (ONE per guardian-student pair)
+-- Step 3: Migrate relationship records (ONE per guardian-student pair)
 -- Note: Links Nr_StudentID directly during INSERT by joining to Students → Nr_Students
 -- Uses DISTINCT ON to handle duplicate records in GuardianTable
 INSERT INTO "Nr_StudentGuardians" (
@@ -470,39 +407,7 @@ WHERE g."GlobalUID" IS NOT NULL
 ORDER BY ng."Nr_GuardianID", s."ID", g."SchoolID", g."ID"
 ON CONFLICT ("Nr_StudentID", "Nr_GuardianID") WHERE "Nr_StudentID" IS NOT NULL DO NOTHING;
 
--- Step 5: Migrate address data (ONE per guardian, deduplicated)
-INSERT INTO "Nr_GuardianAddress" (
-    "Nr_GuardianID",
-    "Street",
-    "PostalCode",
-    "Residence",
-    "Subdistrict",
-    "State",
-    "Country",
-    "CountryOfBirth",
-    "Country1",
-    "Country2"
-)
-SELECT DISTINCT ON (ng."Nr_GuardianID")
-    ng."Nr_GuardianID",
-    g."Street",
-    g."PostalCode",
-    g."Residence",
-    g."Subdistrict",
-    g."State",
-    g."Country",
-    g."CountryOfBirth",
-    g."Country1",
-    g."Country2"
-FROM "GuardianTable" g
-INNER JOIN "Nr_Guardians" ng ON ng."GlobalUID" = g."GlobalUID"
-WHERE g."GlobalUID" IS NOT NULL
-AND (g."Street" IS NOT NULL OR g."PostalCode" IS NOT NULL OR g."Residence" IS NOT NULL)
-AND NOT EXISTS (
-    SELECT 1 FROM "Nr_GuardianAddress" na WHERE na."Nr_GuardianID" = ng."Nr_GuardianID"
-)
-ORDER BY ng."Nr_GuardianID", g."ID";
-
+-- Note: Step 5 - Guardian address migration removed - addresses are now stored in Nr_Addresses table (User module)
 -- Step 6: Migrate secondary contact data (ONE per guardian, deduplicated)
 -- Note: Primary contact (Email, Phone, Mobile, Fax) already migrated to Nr_Users in Step 2
 INSERT INTO "Nr_GuardianContact" (
@@ -565,43 +470,7 @@ AND NOT EXISTS (
 )
 ORDER BY ng."Nr_GuardianID", g."ID";
 
--- Step 9: Migrate portal data (ONE per guardian, deduplicated) - Security Sensitive
--- Note: Handle duplicate RegistrationName conflicts using window function
--- First guardian with a username gets it, others get NULL RegistrationName
--- Password is NOT migrated here - it's stored in Nr_Users table
-INSERT INTO "Nr_GuardianPortal" (
-    "Nr_GuardianID",
-    "RegistrationX",
-    "RegistrationName"
-)
-WITH guardian_portal_ranked AS (
-    SELECT DISTINCT ON (ng."Nr_GuardianID")
-        ng."Nr_GuardianID",
-        g."RegistrationX",
-        g."RegistrationName",
-        -- Rank guardians with same RegistrationName (first one gets rank 1)
-        ROW_NUMBER() OVER (
-            PARTITION BY g."RegistrationName"
-            ORDER BY ng."Nr_GuardianID"
-        ) AS rn
-    FROM "GuardianTable" g
-    INNER JOIN "Nr_Guardians" ng ON ng."GlobalUID" = g."GlobalUID"
-    WHERE g."GlobalUID" IS NOT NULL
-    AND (g."RegistrationX" IS NOT NULL OR g."RegistrationName" IS NOT NULL)
-    ORDER BY ng."Nr_GuardianID", g."ID"
-)
-SELECT
-    "Nr_GuardianID",
-    "RegistrationX",
-    -- Only assign RegistrationName to first guardian with that username
-    CASE
-        WHEN rn = 1 THEN "RegistrationName"
-        ELSE NULL  -- Duplicate username - set to NULL for manual review
-    END AS "RegistrationName"
-FROM guardian_portal_ranked
-WHERE NOT EXISTS (
-    SELECT 1 FROM "Nr_GuardianPortal" np WHERE np."Nr_GuardianID" = guardian_portal_ranked."Nr_GuardianID"
-);
+-- Note: Step 9 - Portal data migration removed - portal data is now migrated directly in Step 1
 
 -- ============================================================================
 -- Post-Migration Validation Queries
@@ -622,7 +491,7 @@ WHERE NOT EXISTS (
 -- SELECT COUNT(*) AS with_contact FROM "Nr_GuardianContact";
 -- SELECT COUNT(*) AS with_finance FROM "Nr_GuardianFinance";
 -- SELECT COUNT(*) AS with_employment FROM "Nr_GuardianEmployment";
--- SELECT COUNT(*) AS with_portal FROM "Nr_GuardianPortal";
+-- SELECT COUNT(*) AS with_portal FROM "Nr_Guardians" WHERE "RegistrationName" IS NOT NULL;
 
 -- Guardians with multiple children
 -- SELECT ng."Nr_GuardianID", COUNT(*) as children_count
@@ -633,11 +502,10 @@ WHERE NOT EXISTS (
 
 -- Guardians with username conflicts (RegistrationName set to NULL due to duplicates)
 -- SELECT ng."Nr_GuardianID", ng."GlobalUID", u."FirstName", u."LastName", u."Email"
--- FROM "Nr_GuardianPortal" gp
--- INNER JOIN "Nr_Guardians" ng ON gp."Nr_GuardianID" = ng."Nr_GuardianID"
+-- FROM "Nr_Guardians" ng
 -- LEFT JOIN "Nr_Users" u ON ng."Nr_UserID" = u."UserID"
--- WHERE gp."RegistrationName" IS NULL
--- AND gp."RegistrationX" IS NOT NULL;
+-- WHERE ng."RegistrationName" IS NULL
+-- AND ng."RegistrationX" IS NOT NULL;
 
 -- Duplicate RegistrationNames in source data (for manual review)
 -- SELECT g."RegistrationName", COUNT(DISTINCT g."GlobalUID") as guardian_count

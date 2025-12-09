@@ -119,20 +119,22 @@ INSERT INTO "Nr_Guardians" (
     "Nr_UserID",                  -- Set to NULL, update later if needed
     "GlobalUID",
     "XmoodID",
-    "Tenant",
     "Salutation",
     "Title",
     "LetterSalutation",
+    "RegistrationX",              -- Portal registration data now directly in Nr_Guardians
+    "RegistrationName",           -- Portal registration data now directly in Nr_Guardians
     "Timestamp"
 )
 SELECT DISTINCT ON (g."GlobalUID")
     NULL,                         -- Nr_UserID - needs to be linked later
     g."GlobalUID",
     g."XmoodID",
-    g."Tenant",
     g."Salutation",
     g."Title",
     g."LetterSalutation",
+    g."RegistrationX",            -- Portal registration data now directly in Nr_Guardians
+    g."RegistrationName",         -- Portal registration data now directly in Nr_Guardians
     g."Timestamp"
 FROM "GuardianTable" g
 WHERE g."GlobalUID" IS NOT NULL  -- Only migrate guardians with GlobalUID for now
@@ -224,47 +226,55 @@ FROM "GuardianTable" g_old
 INNER JOIN "Nr_Guardians" g_new ON g_old."GlobalUID" = g_new."GlobalUID"
 WHERE g_old."GlobalUID" IS NOT NULL;
 
--- -----------------------------------------------------------------------
--- 4.1: Migrate Address Data to Nr_GuardianAddress
--- -----------------------------------------------------------------------
--- Only migrate ONE address per unique guardian (use DISTINCT ON GlobalUID)
-
-INSERT INTO "Nr_GuardianAddress" (
-    "Nr_GuardianID",
-    "Street",
-    "PostalCode",
-    "Residence",
-    "Subdistrict",
-    "State",
-    "Country",
-    "CountryOfBirth",
-    "Country1",
-    "Country2"
-)
-SELECT DISTINCT ON (ng."Nr_GuardianID")
-    ng."Nr_GuardianID",
-    g."Street",
-    g."PostalCode",
-    g."Residence",
-    g."Subdistrict",
-    g."State",
-    g."Country",
-    g."CountryOfBirth",
-    g."Country1",
-    g."Country2"
-FROM "GuardianTable" g
-INNER JOIN "Nr_Guardians" ng ON g."GlobalUID" = ng."GlobalUID"
-WHERE g."GlobalUID" IS NOT NULL
-  AND (g."Street" IS NOT NULL
-   OR g."PostalCode" IS NOT NULL
-   OR g."Residence" IS NOT NULL
-   OR g."Subdistrict" IS NOT NULL
-   OR g."State" IS NOT NULL
-   OR g."Country" IS NOT NULL
-   OR g."CountryOfBirth" IS NOT NULL
-   OR g."Country1" IS NOT NULL
-   OR g."Country2" IS NOT NULL)
-ORDER BY ng."Nr_GuardianID", g."ID"; -- Use first occurrence if duplicates exist
+-- ============================================================================
+-- DEPRECATED: 4.1 - Migrate Address Data to Nr_GuardianAddress
+-- ============================================================================
+-- Note: Guardian addresses are now stored in Nr_Addresses table (User module)
+-- Address data should be migrated to Nr_Addresses and linked via Nr_Users.AddressID
+-- Since guardians are users (they have Nr_UserID), their addresses are stored
+-- in the normalized Nr_Addresses table via the user's AddressID
+-- This migration step is kept for reference but should not be executed
+-- ============================================================================
+--
+-- -- 4.1: Migrate Address Data to Nr_GuardianAddress
+-- -- Only migrate ONE address per unique guardian (use DISTINCT ON GlobalUID)
+--
+-- INSERT INTO "Nr_GuardianAddress" (
+--     "Nr_GuardianID",
+--     "Street",
+--     "PostalCode",
+--     "Residence",
+--     "Subdistrict",
+--     "State",
+--     "Country",
+--     "CountryOfBirth",
+--     "Country1",
+--     "Country2"
+-- )
+-- SELECT DISTINCT ON (ng."Nr_GuardianID")
+--     ng."Nr_GuardianID",
+--     g."Street",
+--     g."PostalCode",
+--     g."Residence",
+--     g."Subdistrict",
+--     g."State",
+--     g."Country",
+--     g."CountryOfBirth",
+--     g."Country1",
+--     g."Country2"
+-- FROM "GuardianTable" g
+-- INNER JOIN "Nr_Guardians" ng ON g."GlobalUID" = ng."GlobalUID"
+-- WHERE g."GlobalUID" IS NOT NULL
+--   AND (g."Street" IS NOT NULL
+--    OR g."PostalCode" IS NOT NULL
+--    OR g."Residence" IS NOT NULL
+--    OR g."Subdistrict" IS NOT NULL
+--    OR g."State" IS NOT NULL
+--    OR g."Country" IS NOT NULL
+--    OR g."CountryOfBirth" IS NOT NULL
+--    OR g."Country1" IS NOT NULL
+--    OR g."Country2" IS NOT NULL)
+-- ORDER BY ng."Nr_GuardianID", g."ID"; -- Use first occurrence if duplicates exist
 
 -- -----------------------------------------------------------------------
 -- 4.2: Migrate Contact Data to Nr_GuardianContact
@@ -337,29 +347,17 @@ WHERE g."GlobalUID" IS NOT NULL
    OR g."Profession" IS NOT NULL)
 ORDER BY ng."Nr_GuardianID", g."ID";
 
--- -----------------------------------------------------------------------
--- 4.5: Migrate Portal Access Data to Nr_GuardianPortal (Security Sensitive)
--- -----------------------------------------------------------------------
--- Only migrate ONE portal access record per unique guardian
-
-INSERT INTO "Nr_GuardianPortal" (
-    "Nr_GuardianID",
-    "RegistrationX",
-    "RegistrationName",
-    "Password"
-)
-SELECT DISTINCT ON (ng."Nr_GuardianID")
-    ng."Nr_GuardianID",
-    g."RegistrationX",
-    g."RegistrationName",
-    g."Password"
-FROM "GuardianTable" g
-INNER JOIN "Nr_Guardians" ng ON g."GlobalUID" = ng."GlobalUID"
-WHERE g."GlobalUID" IS NOT NULL
-  AND (g."RegistrationX" IS NOT NULL
-   OR g."RegistrationName" IS NOT NULL
-   OR g."Password" IS NOT NULL)
-ORDER BY ng."Nr_GuardianID", g."ID";
+-- ============================================================================
+-- DEPRECATED: 4.5 - Portal Access Data Migration Removed
+-- ============================================================================
+-- Note: Portal registration data (RegistrationX, RegistrationName) is now
+-- migrated directly in Phase 2 as part of the guardian identity migration.
+-- This step is kept for reference but should not be executed.
+--
+-- Portal data is now stored directly in Nr_Guardians table, eliminating the
+-- need for a separate Nr_GuardianPortal table and reducing joins.
+-- Password is still stored in Nr_Users table, not in Nr_Guardians.
+-- ============================================================================
 
 -- =====================================================================
 -- PHASE 5: POST-MIGRATION VALIDATION
@@ -383,22 +381,24 @@ BEGIN
         FROM "GuardianTable" WHERE "GlobalUID" IS NOT NULL;
     SELECT COUNT(*) INTO v_core_count FROM "Nr_Guardians";
     SELECT COUNT(*) INTO v_relationships_count FROM "Nr_StudentGuardians";
-    SELECT COUNT(*) INTO v_address_count FROM "Nr_GuardianAddress";
+    -- Note: Address migration removed - addresses are now in Nr_Addresses table
+    -- SELECT COUNT(*) INTO v_address_count FROM "Nr_GuardianAddress";
+    v_address_count := 0; -- Placeholder - addresses are in Nr_Addresses
     SELECT COUNT(*) INTO v_contact_count FROM "Nr_GuardianContact";
     SELECT COUNT(*) INTO v_finance_count FROM "Nr_GuardianFinance";
     SELECT COUNT(*) INTO v_employment_count FROM "Nr_GuardianEmployment";
-    SELECT COUNT(*) INTO v_portal_count FROM "Nr_GuardianPortal";
+    SELECT COUNT(*) INTO v_portal_count FROM "Nr_Guardians" WHERE "RegistrationName" IS NOT NULL;
 
     RAISE NOTICE '=== MIGRATION VALIDATION RESULTS ===';
     RAISE NOTICE 'Source GuardianTable records (includes duplicates): %', v_source_count;
     RAISE NOTICE 'Unique guardians in source (by GlobalUID): %', v_unique_guardians;
     RAISE NOTICE 'Migrated Nr_Guardians records (deduplicated): %', v_core_count;
     RAISE NOTICE 'Migrated Nr_StudentGuardians relationships: %', v_relationships_count;
-    RAISE NOTICE 'Migrated Nr_GuardianAddress records: %', v_address_count;
+    RAISE NOTICE 'Address records: Migrated to Nr_Addresses (via Nr_Users.AddressID)';
     RAISE NOTICE 'Migrated Nr_GuardianContact records: %', v_contact_count;
     RAISE NOTICE 'Migrated Nr_GuardianFinance records: %', v_finance_count;
     RAISE NOTICE 'Migrated Nr_GuardianEmployment records: %', v_employment_count;
-    RAISE NOTICE 'Migrated Nr_GuardianPortal records: %', v_portal_count;
+    RAISE NOTICE 'Guardians with portal access (RegistrationName in Nr_Guardians): %', v_portal_count;
     RAISE NOTICE '';
     RAISE NOTICE 'Expected: Relationships count ≈ Source count (one relationship per old record)';
     RAISE NOTICE 'Expected: Core guardians count ≈ Unique guardians (deduplicated)';
@@ -419,12 +419,21 @@ BEGIN
 END $$;
 
 -- Validate data integrity - check for orphaned records
+-- Note: Address validation removed - addresses are now in Nr_Addresses table
+-- SELECT
+--     'Orphaned Address Records' AS "Integrity Check",
+--     COUNT(*) AS "Count"
+-- FROM "Nr_GuardianAddress" a
+-- LEFT JOIN "Nr_Guardians" g ON a."Nr_GuardianID" = g."Nr_GuardianID"
+-- WHERE g."Nr_GuardianID" IS NULL
+-- UNION ALL
 SELECT
-    'Orphaned Address Records' AS "Integrity Check",
+    'Orphaned Address Records (via Nr_Addresses)' AS "Integrity Check",
     COUNT(*) AS "Count"
-FROM "Nr_GuardianAddress" a
-LEFT JOIN "Nr_Guardians" g ON a."Nr_GuardianID" = g."Nr_GuardianID"
-WHERE g."Nr_GuardianID" IS NULL
+FROM "Nr_Users" u
+INNER JOIN "Nr_Guardians" g ON u."UserID" = g."Nr_UserID"
+LEFT JOIN "Nr_Addresses" a ON u."AddressID" = a."ID"
+WHERE u."AddressID" IS NOT NULL AND a."ID" IS NULL
 UNION ALL
 SELECT
     'Orphaned Contact Records',
@@ -447,12 +456,7 @@ FROM "Nr_GuardianEmployment" e
 LEFT JOIN "Nr_Guardians" g ON e."Nr_GuardianID" = g."Nr_GuardianID"
 WHERE g."Nr_GuardianID" IS NULL
 UNION ALL
-SELECT
-    'Orphaned Portal Records',
-    COUNT(*)
-FROM "Nr_GuardianPortal" p
-LEFT JOIN "Nr_Guardians" g ON p."Nr_GuardianID" = g."Nr_GuardianID"
-WHERE g."Nr_GuardianID" IS NULL
+-- Note: Portal data is now directly in Nr_Guardians, so no orphaned portal records check needed
 UNION ALL
 SELECT
     'Orphaned Relationship Records',
@@ -575,9 +579,10 @@ COMMIT;
 --
 -- 5. Update Application Code
 --    - Create new JPA entity classes:
---      - EntityNrGuardian
+--      - EntityNrGuardian (includes RegistrationX, RegistrationName)
 --      - EntityNrStudentGuardian (junction entity)
---      - EntityNrGuardianAddress, Contact, Finance, Employment, Portal
+--      - EntityNrGuardianContact, Finance, Employment
+--      - Note: Portal data is now in EntityNrGuardian, Address is in EntityNrAddress
 --    - Create repository interfaces
 --    - Create mapper classes for DTO conversion
 --    - Update service layer to use new entities
@@ -592,7 +597,7 @@ COMMIT;
 --
 -- 7. Security Enhancements (Post-Migration)
 --    - Implement encryption for Nr_GuardianFinance.AccountNumber
---    - Verify password hashing in Nr_GuardianPortal.Password
+--    - Verify password hashing in Nr_Users.PasswordHash (not in Nr_Guardians)
 --    - Configure row-level security if needed
 --    - Set up audit logging for sensitive tables
 --
@@ -606,11 +611,13 @@ SELECT
     'Migration Summary' AS "Report",
     (SELECT COUNT(*) FROM "Nr_Guardians") AS "Total Guardians (Deduplicated)",
     (SELECT COUNT(*) FROM "Nr_StudentGuardians") AS "Total Relationships",
-    (SELECT COUNT(*) FROM "Nr_GuardianAddress") AS "With Address",
+    (SELECT COUNT(*) FROM "Nr_Users" u 
+     INNER JOIN "Nr_Guardians" g ON u."UserID" = g."Nr_UserID" 
+     WHERE u."AddressID" IS NOT NULL) AS "With Address (via Nr_Addresses)",
     (SELECT COUNT(*) FROM "Nr_GuardianContact") AS "With Contact",
     (SELECT COUNT(*) FROM "Nr_GuardianFinance") AS "With Finance",
     (SELECT COUNT(*) FROM "Nr_GuardianEmployment") AS "With Employment",
-    (SELECT COUNT(*) FROM "Nr_GuardianPortal") AS "With Portal Access";
+    (SELECT COUNT(*) FROM "Nr_Guardians" WHERE "RegistrationName" IS NOT NULL) AS "With Portal Access";
 
 -- Example: Find guardians with multiple children across different schools
 SELECT

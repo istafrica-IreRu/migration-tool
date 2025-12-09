@@ -16,13 +16,13 @@
 --   - Junction table (Nr_StudentGuardians) manages relationships
 --
 -- STRUCTURE:
---   Nr_Guardians - Guardian identity (ONE per person)
+--   Nr_Guardians - Guardian identity (ONE per person, includes portal registration data)
 --   Nr_StudentGuardians - Junction table (MANY-TO-MANY relationships)
---   Nr_GuardianAddress - Address data (ONE per guardian)
+--   Nr_Addresses - Address data (shared table for all users - guardians are users)
 --   Nr_GuardianContact - Contact data (ONE per guardian)
 --   Nr_GuardianFinance - Financial data (ONE per guardian, GDPR sensitive)
 --   Nr_GuardianEmployment - Employment data (ONE per guardian)
---   Nr_GuardianPortal - Portal access (ONE per guardian, Security sensitive)
+--   Note: Portal registration data (RegistrationX, RegistrationName) is now directly in Nr_Guardians
 -- =====================================================================
 
 -- =====================================================================
@@ -45,6 +45,8 @@ CREATE TABLE "Nr_Guardians" (
     "Salutation" VARCHAR(50),                          -- Guardian salutation (e.g., Mr., Mrs., Ms., Dr.)
     "Title" VARCHAR(20),                               -- Guardian title (e.g., Prof., Eng., etc.)
     "LetterSalutation" VARCHAR(50),                    -- Formal salutation for letters
+    "RegistrationX" SMALLINT,                         -- Portal registration flag/status (Password in Nr_Users)
+    "RegistrationName" VARCHAR(20),                   -- Portal login username (Password in Nr_Users)
     "Timestamp" BYTEA NOT NULL,                        -- Row version for optimistic locking
 
     -- Foreign Key Constraints
@@ -58,16 +60,20 @@ CREATE TABLE "Nr_Guardians" (
 -- Indexes for common queries
 CREATE INDEX "IDX_Nr_Guardians_UserID" ON "Nr_Guardians"("Nr_UserID");
 CREATE INDEX "IDX_Nr_Guardians_XmoodID" ON "Nr_Guardians"("XmoodID");
+CREATE UNIQUE INDEX "UQ_Nr_Guardians_RegistrationName" ON "Nr_Guardians"("RegistrationName")
+    WHERE "RegistrationName" IS NOT NULL;
 -- Note: Tenant is obtained from Nr_Users."TenantID" via join, not stored in Nr_Guardians
 
 -- Add comments for documentation
-COMMENT ON TABLE "Nr_Guardians" IS 'Guardian identity - ONE record per person. Does not contain student relationships (see Nr_StudentGuardians). Tenant is obtained from linked Nr_Users."TenantID" via join.';
+COMMENT ON TABLE "Nr_Guardians" IS 'Guardian identity - ONE record per person. Does not contain student relationships (see Nr_StudentGuardians). Tenant is obtained from linked Nr_Users."TenantID" via join. Portal registration data (RegistrationX, RegistrationName) is stored directly in this table.';
 COMMENT ON COLUMN "Nr_Guardians"."Nr_UserID" IS 'Nullable reference to Nr_Users - guardian may not have user account. If present, personal data (Name, FirstName) and TenantID should be in Nr_Users.';
 COMMENT ON COLUMN "Nr_Guardians"."GlobalUID" IS 'Global unique identifier for cross-system integration';
 COMMENT ON COLUMN "Nr_Guardians"."XmoodID" IS 'XMood platform integration identifier';
 COMMENT ON COLUMN "Nr_Guardians"."Salutation" IS 'Guardian salutation (e.g., Mr., Mrs., Ms., Dr.)';
 COMMENT ON COLUMN "Nr_Guardians"."Title" IS 'Guardian title (e.g., Prof., Eng., etc.)';
 COMMENT ON COLUMN "Nr_Guardians"."LetterSalutation" IS 'Formal salutation for letters and official correspondence';
+COMMENT ON COLUMN "Nr_Guardians"."RegistrationX" IS 'Portal registration flag/status. Password is stored in Nr_Users table, not here.';
+COMMENT ON COLUMN "Nr_Guardians"."RegistrationName" IS 'Portal login username - must be unique. Password is stored in Nr_Users table, not here.';
 
 -- =====================================================================
 -- TABLE 2: Nr_StudentGuardians (Junction Table - Many-to-Many)
@@ -126,41 +132,40 @@ COMMENT ON COLUMN "Nr_StudentGuardians"."SameHousehold" IS 'Indicates if guardia
 COMMENT ON COLUMN "Nr_StudentGuardians"."FamilyCode" IS 'Family grouping code for linking related guardians and students';
 
 -- =====================================================================
--- TABLE 3: Nr_GuardianAddress (Address Data)
+-- DEPRECATED: TABLE 3 - Nr_GuardianAddress (Address Data)
 -- =====================================================================
--- Purpose: Guardian residential address information
--- Relationships: One-to-one with Nr_Guardians
--- Pattern: Follows Nr_StudentAddress normalization pattern
--- Data Scope: ONE address per guardian (shared across all their children)
+-- Note: Guardian addresses are now stored in Nr_Addresses table (User module)
+-- Relationship reversed: Nr_Users has AddressID that references Nr_Addresses
+-- Since guardians are users (they have Nr_UserID), their addresses are stored
+-- in the normalized Nr_Addresses table via the user's AddressID
+-- This table is kept for reference but should not be used in new code
 -- =====================================================================
-
-CREATE TABLE "Nr_GuardianAddress" (
-    "Nr_GuardianAddressID" SERIAL PRIMARY KEY,
-    "Nr_GuardianID" INTEGER NOT NULL,                 -- FK to Nr_Guardians
-    "Street" VARCHAR(60),                             -- Street address
-    "PostalCode" VARCHAR(10),                         -- Postal/ZIP code
-    "Residence" VARCHAR(40),                          -- City/Residence
-    "Subdistrict" VARCHAR(50),                        -- Subdistrict/Borough
-    "State" VARCHAR(3),                               -- State/Province code
-    "Country" VARCHAR(30),                            -- Country of residence
-    "CountryOfBirth" VARCHAR(30),                     -- Country of birth
-    "Country1" VARCHAR(30),                           -- Additional country 1
-    "Country2" VARCHAR(30),                           -- Additional country 2
-
-    -- Foreign Key Constraints
-    CONSTRAINT "FK_Nr_GuardianAddress_Nr_Guardians"
-        FOREIGN KEY ("Nr_GuardianID") REFERENCES "Nr_Guardians"("Nr_GuardianID") ON DELETE CASCADE
-);
-
--- Indexes for common queries
-CREATE UNIQUE INDEX "UQ_Nr_GuardianAddress_GuardianID" ON "Nr_GuardianAddress"("Nr_GuardianID");
-CREATE INDEX "IDX_Nr_GuardianAddress_PostalCode" ON "Nr_GuardianAddress"("PostalCode");
-CREATE INDEX "IDX_Nr_GuardianAddress_Country" ON "Nr_GuardianAddress"("Country");
-
--- Add comments for documentation
-COMMENT ON TABLE "Nr_GuardianAddress" IS 'Guardian address data - ONE per guardian, shared across all their children';
-COMMENT ON COLUMN "Nr_GuardianAddress"."Country1" IS 'Additional citizenship country (supports dual/multiple citizenship)';
-COMMENT ON COLUMN "Nr_GuardianAddress"."Country2" IS 'Additional citizenship country (supports dual/multiple citizenship)';
+--
+-- CREATE TABLE "Nr_GuardianAddress" (
+--     "Nr_GuardianAddressID" SERIAL PRIMARY KEY,
+--     "Nr_GuardianID" INTEGER NOT NULL,                 -- FK to Nr_Guardians
+--     "Street" VARCHAR(60),                             -- Street address
+--     "PostalCode" VARCHAR(10),                         -- Postal/ZIP code
+--     "Residence" VARCHAR(40),                          -- City/Residence
+--     "Subdistrict" VARCHAR(50),                        -- Subdistrict/Borough
+--     "State" VARCHAR(3),                               -- State/Province code
+--     "Country" VARCHAR(30),                            -- Country of residence
+--     "CountryOfBirth" VARCHAR(30),                     -- Country of birth
+--     "Country1" VARCHAR(30),                           -- Additional country 1
+--     "Country2" VARCHAR(30),                           -- Additional country 2
+--
+--     -- Foreign Key Constraints
+--     CONSTRAINT "FK_Nr_GuardianAddress_Nr_Guardians"
+--         FOREIGN KEY ("Nr_GuardianID") REFERENCES "Nr_Guardians"("Nr_GuardianID") ON DELETE CASCADE
+-- );
+--
+-- CREATE UNIQUE INDEX "UQ_Nr_GuardianAddress_GuardianID" ON "Nr_GuardianAddress"("Nr_GuardianID");
+-- CREATE INDEX "IDX_Nr_GuardianAddress_PostalCode" ON "Nr_GuardianAddress"("PostalCode");
+-- CREATE INDEX "IDX_Nr_GuardianAddress_Country" ON "Nr_GuardianAddress"("Country");
+--
+-- COMMENT ON TABLE "Nr_GuardianAddress" IS 'Guardian address data - ONE per guardian, shared across all their children';
+-- COMMENT ON COLUMN "Nr_GuardianAddress"."Country1" IS 'Additional citizenship country (supports dual/multiple citizenship)';
+-- COMMENT ON COLUMN "Nr_GuardianAddress"."Country2" IS 'Additional citizenship country (supports dual/multiple citizenship)';
 
 -- =====================================================================
 -- TABLE 4: Nr_GuardianContact (Additional Contact Information)
@@ -257,34 +262,30 @@ CREATE UNIQUE INDEX "UQ_Nr_GuardianEmployment_GuardianID" ON "Nr_GuardianEmploym
 COMMENT ON TABLE "Nr_GuardianEmployment" IS 'Guardian employment data - ONE per guardian, shared across all their children';
 
 -- =====================================================================
--- TABLE 7: Nr_GuardianPortal (Portal Access - Security Sensitive)
+-- DEPRECATED: TABLE 7 - Nr_GuardianPortal (Portal Access)
 -- =====================================================================
--- Purpose: Portal registration data
--- Relationships: One-to-one with Nr_Guardians
--- Security: Registration credentials tracked here, password stored in Nr_Users table
--- Note: Password is stored in Nr_Users.PasswordHash, not duplicated here
--- Data Scope: ONE portal access per guardian (shared across all their children)
+-- Note: Portal registration data (RegistrationX, RegistrationName) is now
+-- directly in Nr_Guardians table. This simplifies the schema and reduces
+-- joins. Password is still stored in Nr_Users table, not in Nr_Guardians.
+-- This table definition is kept for reference but should not be created.
 -- =====================================================================
-
-CREATE TABLE "Nr_GuardianPortal" (
-    "Nr_GuardianPortalID" SERIAL PRIMARY KEY,
-    "Nr_GuardianID" INTEGER NOT NULL,                 -- FK to Nr_Guardians
-    "RegistrationX" SMALLINT,                         -- Registration flag/status
-    "RegistrationName" VARCHAR(20),                   -- Registration username
-
-    -- Foreign Key Constraints
-    CONSTRAINT "FK_Nr_GuardianPortal_Nr_Guardians"
-        FOREIGN KEY ("Nr_GuardianID") REFERENCES "Nr_Guardians"("Nr_GuardianID") ON DELETE CASCADE
-);
-
--- Indexes for common queries
-CREATE UNIQUE INDEX "UQ_Nr_GuardianPortal_GuardianID" ON "Nr_GuardianPortal"("Nr_GuardianID");
-CREATE UNIQUE INDEX "UQ_Nr_GuardianPortal_RegistrationName" ON "Nr_GuardianPortal"("RegistrationName")
-    WHERE "RegistrationName" IS NOT NULL;
-
--- Add comments for documentation
-COMMENT ON TABLE "Nr_GuardianPortal" IS 'SECURITY SENSITIVE: Guardian portal registration data. Password is stored in Nr_Users table. ONE per guardian, shared for viewing all their children.';
-COMMENT ON COLUMN "Nr_GuardianPortal"."RegistrationName" IS 'Portal login username - must be unique';
+--
+-- CREATE TABLE "Nr_GuardianPortal" (
+--     "Nr_GuardianPortalID" SERIAL PRIMARY KEY,
+--     "Nr_GuardianID" INTEGER NOT NULL,                 -- FK to Nr_Guardians
+--     "RegistrationX" SMALLINT,                         -- Registration flag/status
+--     "RegistrationName" VARCHAR(20),                   -- Registration username
+--
+--     -- Foreign Key Constraints
+--     CONSTRAINT "FK_Nr_GuardianPortal_Nr_Guardians"
+--         FOREIGN KEY ("Nr_GuardianID") REFERENCES "Nr_Guardians"("Nr_GuardianID") ON DELETE CASCADE
+-- );
+--
+-- CREATE UNIQUE INDEX "UQ_Nr_GuardianPortal_GuardianID" ON "Nr_GuardianPortal"("Nr_GuardianID");
+-- CREATE UNIQUE INDEX "UQ_Nr_GuardianPortal_RegistrationName" ON "Nr_GuardianPortal"("RegistrationName")
+--     WHERE "RegistrationName" IS NOT NULL;
+--
+-- COMMENT ON TABLE "Nr_GuardianPortal" IS 'SECURITY SENSITIVE: Guardian portal registration data. Password is stored in Nr_Users table.';
 
 -- =====================================================================
 -- EXAMPLE QUERIES
@@ -306,9 +307,11 @@ COMMENT ON COLUMN "Nr_GuardianPortal"."RegistrationName" IS 'Portal login userna
 -- ORDER BY sg."SchoolID", sg."Priority";
 
 -- Get complete guardian information with address and contact
--- SELECT g.*, a.*, c.*, e.*
+-- Note: Address is now queried via Nr_Users.AddressID → Nr_Addresses
+-- SELECT g.*, u."AddressID", a.*, c.*, e.*
 -- FROM "Nr_Guardians" g
--- LEFT JOIN "Nr_GuardianAddress" a ON g."Nr_GuardianID" = a."Nr_GuardianID"
+-- LEFT JOIN "Nr_Users" u ON g."Nr_UserID" = u."UserID"
+-- LEFT JOIN "Nr_Addresses" a ON u."AddressID" = a."ID"
 -- LEFT JOIN "Nr_GuardianContact" c ON g."Nr_GuardianID" = c."Nr_GuardianID"
 -- LEFT JOIN "Nr_GuardianEmployment" e ON g."Nr_GuardianID" = e."Nr_GuardianID"
 -- WHERE g."Nr_GuardianID" = ?;
@@ -341,17 +344,20 @@ COMMENT ON COLUMN "Nr_GuardianPortal"."RegistrationName" IS 'Portal login userna
 -- SUMMARY OF NORMALIZATION
 -- =====================================================================
 -- Original: 1 table (GuardianTable) with 33+ columns
--- Normalized: 7 specialized tables
---   1. Nr_Guardians (8 fields) - Guardian identity + personal attributes (ONE per person)
---                                 Includes: Salutation, Title, LetterSalutation
+-- Normalized: 5 specialized tables (Nr_GuardianAddress and Nr_GuardianPortal removed)
+--   1. Nr_Guardians (10 fields) - Guardian identity + personal attributes + portal registration (ONE per person)
+--                                 Includes: Salutation, Title, LetterSalutation, RegistrationX, RegistrationName
 --                                 Note: Tenant obtained from Nr_Users."TenantID" via join
+--                                 Note: Portal registration data now directly in this table
 --   2. Nr_StudentGuardians (15 fields) - Junction table (MANY-TO-MANY)
---   3. Nr_GuardianAddress (11 fields) - Address information
+--   3. Nr_Addresses (shared table) - Address information for all users
+--                                    Note: Address linked via Nr_Users.AddressID (relationship reversed)
+--                                    Since guardians are users, their addresses are in Nr_Addresses
 --   4. Nr_GuardianContact (3 fields) - SECONDARY contact methods only
 --                                      (Primary: Email, Phone, Mobile, Fax in Nr_Users)
 --   5. Nr_GuardianFinance (5 fields) - Financial data (GDPR sensitive)
 --   6. Nr_GuardianEmployment (3 fields) - Employment information
---   7. Nr_GuardianPortal (3 fields) - Portal registration (PasswordHash in Nr_Users)
+--   Note: Portal registration (RegistrationX, RegistrationName) is now in Nr_Guardians (PasswordHash in Nr_Users)
 --
 -- Key Design Features:
 --   ✅ Many-to-Many Relationships - One guardian can have multiple children

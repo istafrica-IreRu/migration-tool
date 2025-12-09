@@ -13,7 +13,7 @@
 -- Create Nr_Applicants table (Core applicant administrative data - NO names, NO SchoolID, NO Tenant, NO Country)
 CREATE TABLE IF NOT EXISTS "Nr_Applicants" (
     "Nr_ApplicantID" INTEGER NOT NULL,
-    "Nr_UserID" INTEGER,
+    "Nr_UserID" INTEGER NOT NULL,
     "Disability" SMALLINT,
     "MotherTongue" CHARACTER VARYING(10),
     "GUID" UUID,
@@ -36,48 +36,13 @@ ALTER SEQUENCE "Nr_Applicants_Nr_ApplicantID_seq" OWNED BY "Nr_Applicants"."Nr_A
 -- Create foreign key to Nr_Users
 ALTER TABLE "Nr_Applicants"
     ADD CONSTRAINT "Nr_Applicants_Nr_UserID_fkey" 
-    FOREIGN KEY ("Nr_UserID") REFERENCES "Nr_Users"("UserID");
+    FOREIGN KEY ("Nr_UserID") REFERENCES "Nr_Users"("UserID") ON DELETE RESTRICT;
 
 -- Create indexes
 CREATE INDEX IF NOT EXISTS "idx_Nr_Applicants_Nr_UserID" ON "Nr_Applicants"("Nr_UserID");
 CREATE INDEX IF NOT EXISTS "idx_Nr_Applicants_GUID" ON "Nr_Applicants"("GUID");
 
--- Create Nr_ApplicantAddress table
-CREATE TABLE IF NOT EXISTS "Nr_ApplicantAddress" (
-    "Nr_AddressID" INTEGER NOT NULL,
-    "Nr_ApplicantID" INTEGER,
-    "Street" CHARACTER VARYING(120),
-    "PostalCode" CHARACTER VARYING(10),
-    "Residence" CHARACTER VARYING(40),
-    "Subdistrict" CHARACTER VARYING(40),
-    "District" CHARACTER VARYING(5),
-    "State" CHARACTER VARYING(3),
-    "Country" CHARACTER VARYING(4),
-    "CountryOfAddress" CHARACTER VARYING(50),
-    "IsForeignAddress" SMALLINT,
-    CONSTRAINT "Nr_ApplicantAddress_pkey" PRIMARY KEY ("Nr_AddressID")
-);
-
--- Create sequence for Nr_ApplicantAddress
-CREATE SEQUENCE IF NOT EXISTS "Nr_ApplicantAddress_Nr_AddressID_seq"
-    AS INTEGER
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-ALTER TABLE "Nr_ApplicantAddress" ALTER COLUMN "Nr_AddressID" SET DEFAULT nextval('"Nr_ApplicantAddress_Nr_AddressID_seq"');
-ALTER SEQUENCE "Nr_ApplicantAddress_Nr_AddressID_seq" OWNED BY "Nr_ApplicantAddress"."Nr_AddressID";
-
--- Create foreign key to Nr_Applicants
-ALTER TABLE "Nr_ApplicantAddress"
-    ADD CONSTRAINT "Nr_ApplicantAddress_Nr_ApplicantID_fkey" 
-    FOREIGN KEY ("Nr_ApplicantID") REFERENCES "Nr_Applicants"("Nr_ApplicantID") ON DELETE CASCADE;
-
--- Create index
-CREATE INDEX IF NOT EXISTS "idx_Nr_ApplicantAddress_Nr_ApplicantID" ON "Nr_ApplicantAddress"("Nr_ApplicantID");
-
+-- Note: Nr_ApplicantAddress table removed - addresses are now stored in Nr_Addresses table (User module)
 -- Note: Nr_ApplicantContact table removed - contact data (email, phone, mobile, fax) is now in Nr_Users table
 
 -- Create Nr_ApplicantApplicationInfo table
@@ -118,10 +83,11 @@ CREATE INDEX IF NOT EXISTS "idx_Nr_ApplicantApplicationInfo_Nr_ApplicantID" ON "
 -- ============================================================================
 
 -- Create Nr_ApplicantGuardians table (Core guardian relationship data - NO names, NO SchoolID, NO Tenant, NO Country)
+-- Note: Portal registration data (RegistrationX, RegistrationName) is now directly in this table
 CREATE TABLE IF NOT EXISTS "Nr_ApplicantGuardians" (
     "Nr_GuardianID" INTEGER NOT NULL,
     "Nr_ApplicantID" INTEGER,
-    "Nr_UserID" INTEGER,
+    "Nr_UserID" INTEGER NOT NULL,
     "StudentNumber" INTEGER,
     "Category" SMALLINT,
     "Priority" SMALLINT,
@@ -143,6 +109,8 @@ CREATE TABLE IF NOT EXISTS "Nr_ApplicantGuardians" (
     "GUID" UUID,
     "XmoodID" UUID,
     "GlobalUID" UUID,
+    "RegistrationX" SMALLINT,
+    "RegistrationName" CHARACTER VARYING(255),
     "Timestamp" BYTEA NOT NULL,
     CONSTRAINT "Nr_ApplicantGuardians_pkey" PRIMARY KEY ("Nr_GuardianID")
 );
@@ -166,52 +134,18 @@ ALTER TABLE "Nr_ApplicantGuardians"
 
 ALTER TABLE "Nr_ApplicantGuardians"
     ADD CONSTRAINT "Nr_ApplicantGuardians_Nr_UserID_fkey" 
-    FOREIGN KEY ("Nr_UserID") REFERENCES "Nr_Users"("UserID");
+    FOREIGN KEY ("Nr_UserID") REFERENCES "Nr_Users"("UserID") ON DELETE RESTRICT;
 
 -- Create indexes
 CREATE INDEX IF NOT EXISTS "idx_Nr_ApplicantGuardians_Nr_ApplicantID" ON "Nr_ApplicantGuardians"("Nr_ApplicantID");
 CREATE INDEX IF NOT EXISTS "idx_Nr_ApplicantGuardians_Nr_UserID" ON "Nr_ApplicantGuardians"("Nr_UserID");
 CREATE INDEX IF NOT EXISTS "idx_Nr_ApplicantGuardians_GUID" ON "Nr_ApplicantGuardians"("GUID");
+CREATE UNIQUE INDEX IF NOT EXISTS "uq_Nr_ApplicantGuardians_RegistrationName" ON "Nr_ApplicantGuardians"("RegistrationName")
+    WHERE "RegistrationName" IS NOT NULL;
 
--- Create Nr_ApplicantGuardianAddress table
-CREATE TABLE IF NOT EXISTS "Nr_ApplicantGuardianAddress" (
-    "Nr_GuardianAddressID" INTEGER NOT NULL,
-    "Nr_GuardianID" INTEGER,
-    "Street" CHARACTER VARYING(255),
-    "PostalCode" CHARACTER VARYING(255),
-    "Residence" CHARACTER VARYING(255),
-    "Subdistrict" CHARACTER VARYING(255),
-    "State" CHARACTER VARYING(255),
-    "Country" CHARACTER VARYING(255),
-    "CountryOfAddress" CHARACTER VARYING(255),
-    "Country1" CHARACTER VARYING(255),
-    "Country2" CHARACTER VARYING(255),
-    "IsForeignAddress" SMALLINT,
-    CONSTRAINT "Nr_ApplicantGuardianAddress_pkey" PRIMARY KEY ("Nr_GuardianAddressID")
-);
-
--- Create sequence for Nr_ApplicantGuardianAddress
-CREATE SEQUENCE IF NOT EXISTS "Nr_ApplicantGuardianAddress_Nr_GuardianAddressID_seq"
-    AS INTEGER
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-ALTER TABLE "Nr_ApplicantGuardianAddress" ALTER COLUMN "Nr_GuardianAddressID" SET DEFAULT nextval('"Nr_ApplicantGuardianAddress_Nr_GuardianAddressID_seq"');
-ALTER SEQUENCE "Nr_ApplicantGuardianAddress_Nr_GuardianAddressID_seq" OWNED BY "Nr_ApplicantGuardianAddress"."Nr_GuardianAddressID";
-
--- Create foreign key to Nr_ApplicantGuardians
-ALTER TABLE "Nr_ApplicantGuardianAddress"
-    ADD CONSTRAINT "Nr_ApplicantGuardianAddress_Nr_GuardianID_fkey" 
-    FOREIGN KEY ("Nr_GuardianID") REFERENCES "Nr_ApplicantGuardians"("Nr_GuardianID") ON DELETE CASCADE;
-
--- Create index
-CREATE INDEX IF NOT EXISTS "idx_Nr_ApplicantGuardianAddress_Nr_GuardianID" ON "Nr_ApplicantGuardianAddress"("Nr_GuardianID");
-
+-- Note: Nr_ApplicantGuardianAddress table removed - addresses are now stored in Nr_Addresses table (User module)
 -- Note: Nr_ApplicantGuardianContact table removed - contact data (email, phone, mobile, fax) is now in Nr_Users table
--- Phone2 and MobileNumber2 are stored in Nr_ApplicantGuardians table
+-- Note: Phone2 and MobileNumber2 are stored in Nr_ApplicantGuardians table
 
 -- Create Nr_ApplicantGuardianFinance table
 CREATE TABLE IF NOT EXISTS "Nr_ApplicantGuardianFinance" (
@@ -244,35 +178,6 @@ ALTER TABLE "Nr_ApplicantGuardianFinance"
 
 -- Create index
 CREATE INDEX IF NOT EXISTS "idx_Nr_ApplicantGuardianFinance_Nr_GuardianID" ON "Nr_ApplicantGuardianFinance"("Nr_GuardianID");
-
--- Create Nr_ApplicantGuardianPortal table
-CREATE TABLE IF NOT EXISTS "Nr_ApplicantGuardianPortal" (
-    "Nr_GuardianPortalID" INTEGER NOT NULL,
-    "Nr_GuardianID" INTEGER,
-    "RegistrationX" SMALLINT,
-    "RegistrationName" CHARACTER VARYING(255),
-    CONSTRAINT "Nr_ApplicantGuardianPortal_pkey" PRIMARY KEY ("Nr_GuardianPortalID")
-);
-
--- Create sequence for Nr_ApplicantGuardianPortal
-CREATE SEQUENCE IF NOT EXISTS "Nr_ApplicantGuardianPortal_Nr_GuardianPortalID_seq"
-    AS INTEGER
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-ALTER TABLE "Nr_ApplicantGuardianPortal" ALTER COLUMN "Nr_GuardianPortalID" SET DEFAULT nextval('"Nr_ApplicantGuardianPortal_Nr_GuardianPortalID_seq"');
-ALTER SEQUENCE "Nr_ApplicantGuardianPortal_Nr_GuardianPortalID_seq" OWNED BY "Nr_ApplicantGuardianPortal"."Nr_GuardianPortalID";
-
--- Create foreign key to Nr_ApplicantGuardians
-ALTER TABLE "Nr_ApplicantGuardianPortal"
-    ADD CONSTRAINT "Nr_ApplicantGuardianPortal_Nr_GuardianID_fkey" 
-    FOREIGN KEY ("Nr_GuardianID") REFERENCES "Nr_ApplicantGuardians"("Nr_GuardianID") ON DELETE CASCADE;
-
--- Create index
-CREATE INDEX IF NOT EXISTS "idx_Nr_ApplicantGuardianPortal_Nr_GuardianID" ON "Nr_ApplicantGuardianPortal"("Nr_GuardianID");
 
 -- ============================================================================
 -- Phase 3: Create Normalized Tables for Related Applicant Data
@@ -558,40 +463,7 @@ AND NOT EXISTS (
     AND na."GUID" = at."GUID"  -- Use GUID to identify unique applicant records
 );
 
--- Step 2: Migrate address data to Nr_ApplicantAddress
-INSERT INTO "Nr_ApplicantAddress" (
-    "Nr_ApplicantID",
-    "Street",
-    "PostalCode",
-    "Residence",
-    "Subdistrict",
-    "District",
-    "State",
-    "Country",
-    "CountryOfAddress",
-    "IsForeignAddress"
-)
-SELECT
-    na."Nr_ApplicantID",
-    at."Street",
-    at."PostalCode",
-    at."Residence",
-    NULL AS "Subdistrict", -- Not in ApplicantTable
-    NULL AS "District", -- Not in ApplicantTable
-    at."State",
-    at."Country",
-    NULL AS "CountryOfAddress", -- Can be populated from Country if needed
-    CASE WHEN at."Country" IS NOT NULL AND at."Country" != 'DE' THEN 1 ELSE 0 END AS "IsForeignAddress"
-FROM "ApplicantTable" at
-INNER JOIN "Nr_Applicants" na ON (
-    na."Nr_UserID" = at."UserID"
-    AND na."GUID" = at."GUID"  -- Match exact applicant record
-)
-WHERE (at."Street" IS NOT NULL OR at."PostalCode" IS NOT NULL OR at."Residence" IS NOT NULL OR at."Country" IS NOT NULL)
-AND NOT EXISTS (
-    SELECT 1 FROM "Nr_ApplicantAddress" naa WHERE naa."Nr_ApplicantID" = na."Nr_ApplicantID"
-);
-
+-- Note: Step 2 - Address migration removed - addresses are now stored in Nr_Addresses table (User module)
 -- Step 3: Contact data (email, phone, mobile, fax) is already in Nr_Users table
 -- Note: Nr_ApplicantContact table removed - contact data is now in Nr_Users table
 
@@ -674,7 +546,8 @@ AND NOT EXISTS (
 )
 ON CONFLICT DO NOTHING;
 
--- Step 7: Migrate to Nr_ApplicantGuardians (linking to User records where applicable)
+-- Step 7: Migrate to Nr_ApplicantGuardians (guardians MUST have User accounts - Nr_UserID is NOT NULL)
+-- Note: Portal registration data (RegistrationX, RegistrationName) is now migrated directly here
 INSERT INTO "Nr_ApplicantGuardians" (
     "Nr_ApplicantID",
     "Nr_UserID",
@@ -699,11 +572,13 @@ INSERT INTO "Nr_ApplicantGuardians" (
     "GUID",
     "XmoodID",
     "GlobalUID",
+    "RegistrationX",
+    "RegistrationName",
     "Timestamp"
 )
 SELECT 
     na."Nr_ApplicantID",
-    u."UserID" AS "Nr_UserID", -- NULL if guardian doesn't have User account
+    u."UserID" AS "Nr_UserID", -- Required - guardian must have User account
     agt."StudentNumber",
     agt."Category",
     agt."Priority",
@@ -725,6 +600,8 @@ SELECT
     agt."XmoodID" AS "GUID", -- Using XmoodID as GUID if GUID not available
     agt."XmoodID",
     agt."GlobalUID",
+    agt."RegistrationX",  -- Portal registration data now directly in Nr_ApplicantGuardians
+    agt."RegistrationName",  -- Portal registration data now directly in Nr_ApplicantGuardians
     agt."Timestamp"
 FROM "ApplicantGuardianTable" agt
 INNER JOIN "ApplicantTable" at ON at."ID" = agt."StudentNumber" -- StudentNumber maps to ApplicantTable.ID
@@ -732,58 +609,19 @@ INNER JOIN "Nr_Applicants" na ON (
     na."Nr_UserID" = at."UserID"
     AND na."GUID" = at."GUID"  -- Match exact applicant record
 )
-LEFT JOIN "Nr_Users" u ON (
+INNER JOIN "Nr_Users" u ON (
     u."FirstName" = agt."FirstName"
     AND u."LastName" = agt."Name"
     AND u."Email" = agt."Email"
 )
-WHERE NOT EXISTS (
+WHERE u."UserID" IS NOT NULL
+AND NOT EXISTS (
     SELECT 1 FROM "Nr_ApplicantGuardians" nag
     WHERE nag."Nr_ApplicantID" = na."Nr_ApplicantID"
     AND nag."StudentNumber" = agt."StudentNumber"
 );
 
--- Step 8: Migrate guardian address data to Nr_ApplicantGuardianAddress
-INSERT INTO "Nr_ApplicantGuardianAddress" (
-    "Nr_GuardianID",
-    "Street",
-    "PostalCode",
-    "Residence",
-    "Subdistrict",
-    "State",
-    "Country",
-    "CountryOfAddress",
-    "Country1",
-    "Country2",
-    "IsForeignAddress"
-)
-SELECT 
-    nag."Nr_GuardianID",
-    agt."Street",
-    agt."PostalCode",
-    agt."Residence",
-    agt."Subdistrict",
-    agt."State",
-    agt."Country",
-    agt."Country" AS "CountryOfAddress",
-    agt."Country1",
-    agt."Country2",
-    CASE WHEN agt."Country" IS NOT NULL AND agt."Country" != 'DE' THEN 1 ELSE 0 END AS "IsForeignAddress"
-FROM "ApplicantGuardianTable" agt
-INNER JOIN "ApplicantTable" at ON at."ID" = agt."StudentNumber"
-INNER JOIN "Nr_Applicants" na ON (
-    na."Nr_UserID" = at."UserID"
-    AND na."GUID" = at."GUID"  -- Match exact applicant record
-)
-INNER JOIN "Nr_ApplicantGuardians" nag ON (
-    nag."Nr_ApplicantID" = na."Nr_ApplicantID"
-    AND nag."StudentNumber" = agt."StudentNumber"
-)
-WHERE (agt."Street" IS NOT NULL OR agt."PostalCode" IS NOT NULL OR agt."Residence" IS NOT NULL)
-AND NOT EXISTS (
-    SELECT 1 FROM "Nr_ApplicantGuardianAddress" naga WHERE naga."Nr_GuardianID" = nag."Nr_GuardianID"
-);
-
+-- Note: Step 8 - Guardian address migration removed - addresses are now stored in Nr_Addresses table (User module)
 -- Step 9: Guardian contact data (email, phone, mobile, fax) is migrated to Nr_Users table in Step 6
 -- Phone2 and MobileNumber2 are migrated to Nr_ApplicantGuardians table in Step 7
 -- Note: Nr_ApplicantGuardianContact table removed - contact data is now in Nr_Users table
@@ -825,33 +663,7 @@ AND NOT EXISTS (
     SELECT 1 FROM "Nr_ApplicantGuardianFinance" nagf WHERE nagf."Nr_GuardianID" = nag."Nr_GuardianID"
 );
 
--- Step 11: Migrate guardian portal data to Nr_ApplicantGuardianPortal
-INSERT INTO "Nr_ApplicantGuardianPortal" (
-    "Nr_GuardianID",
-    "RegistrationX",
-    "RegistrationName"
-)
-SELECT
-    nag."Nr_GuardianID",
-    agt."RegistrationX",
-    agt."RegistrationName"
-FROM "ApplicantGuardianTable" agt
-INNER JOIN "ApplicantTable" at ON at."ID" = agt."StudentNumber"
-INNER JOIN "Nr_Applicants" na ON (
-    na."Nr_UserID" = at."UserID"
-    AND na."GUID" = at."GUID"  -- Match exact applicant record
-)
-INNER JOIN "Nr_ApplicantGuardians" nag ON (
-    nag."Nr_ApplicantID" = na."Nr_ApplicantID"
-    AND nag."StudentNumber" = agt."StudentNumber"
-)
-WHERE (
-    agt."RegistrationX" IS NOT NULL
-    OR agt."RegistrationName" IS NOT NULL
-)
-AND NOT EXISTS (
-    SELECT 1 FROM "Nr_ApplicantGuardianPortal" nagp WHERE nagp."Nr_GuardianID" = nag."Nr_GuardianID"
-);
+-- Note: Step 11 - Portal data migration removed - portal data is now migrated directly in Step 7
 
 -- ============================================================================
 -- Phase 5: Migrate Procedure Configuration Data to Normalized Tables
@@ -1169,12 +981,14 @@ END $$;
 -- Applicant migration validation
 -- SELECT COUNT(*) AS total_applicants FROM "ApplicantTable";
 -- SELECT COUNT(*) AS migrated_applicants FROM "Nr_Applicants";
--- SELECT COUNT(*) FROM "Nr_Applicants" WHERE "Nr_UserID" IS NULL;
+-- Note: Nr_UserID is NOT NULL - all applicants must have User accounts
+-- SELECT COUNT(*) FROM "Nr_Applicants" WHERE "Nr_UserID" IS NULL; -- Should always return 0
 
 -- Guardian migration validation
 -- SELECT COUNT(*) AS total_guardians FROM "ApplicantGuardianTable";
 -- SELECT COUNT(*) AS migrated_guardians FROM "Nr_ApplicantGuardians";
--- SELECT COUNT(*) FROM "Nr_ApplicantGuardians" WHERE "Nr_UserID" IS NULL;
+-- Note: Nr_UserID is NOT NULL - all guardians must have User accounts
+-- SELECT COUNT(*) FROM "Nr_ApplicantGuardians" WHERE "Nr_UserID" IS NULL; -- Should always return 0
 
 -- Related tables migration validation
 -- SELECT COUNT(*) AS total_procedure_data FROM "ApplicantProcedureData";
