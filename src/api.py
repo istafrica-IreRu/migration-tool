@@ -333,6 +333,60 @@ def run_migration(selected_tables: List[str], translations_file: str = None, nor
         migration_state['status'] = 'idle' if migration_state['status'] != 'error' else 'error'
 
 
+
+
+@app.route('/api/connect', methods=['POST'])
+def connect_database():
+    """
+    Validate connection settings and store them for the session.
+    Expects JSON body with optional 'mssql' and 'postgresql' keys.
+    """
+    global runtime_config
+    
+    data = request.json
+    overrides = {}
+    
+    if 'mssql' in data:
+        overrides['mssql'] = data['mssql']
+    if 'postgresql' in data:
+        overrides['postgresql'] = data['postgresql']
+        
+    try:
+        # Load config with these overrides to validate
+        config = load_config(overrides)
+        
+        # Test MSSQL Connection
+        try:
+            conn_str = config.mssql.get_connection_string()
+            with pyodbc.connect(conn_str, timeout=5) as conn:
+                pass
+        except Exception as e:
+            return jsonify({'error': f'MSSQL Connection Failed: {str(e)}'}), 400
+
+        # Test PostgreSQL Connection
+        try:
+            params = config.postgresql.get_connection_params()
+            # Set a low connect timeout
+            params['connect_timeout'] = 5
+            with psycopg2.connect(**params) as conn:
+                pass
+        except Exception as e:
+            return jsonify({'error': f'PostgreSQL Connection Failed: {str(e)}'}), 400
+
+        # If successful, update the global runtime config
+        runtime_config = overrides
+        
+        return jsonify({
+            'message': 'Connections successful',
+            'config_summary': config.display_summary()
+        })
+        
+    except ValueError as ve:
+        return jsonify({'error': str(ve)}), 400
+    except Exception as e:
+        return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
+
+
 @app.route('/api/tables', methods=['GET'])
 def get_tables():
     """Get list of available tables from MSSQL."""
