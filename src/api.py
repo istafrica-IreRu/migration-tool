@@ -62,16 +62,15 @@ runtime_config: Optional[Dict[str, Any]] = None
 
 
 def get_configured_mssql_connection():
-    """Get MSSQL connection using config (env or runtime)."""
+    """Get MSSQL connection using runtime config (no fallback)."""
+    if not runtime_config:
+        raise Exception("Database connection not configured. Please use Connection Settings to configure your database credentials.")
+    
     try:
         config = load_config(runtime_config)
         return pyodbc.connect(config.mssql.get_connection_string())
     except Exception as e:
-        logging.error(f"Error connecting to MSSQL via config: {e}")
-        # Fallback only if no runtime config is present
-        if not runtime_config:
-            from main import get_mssql_connection
-            return get_mssql_connection()
+        logging.error(f"Error connecting to MSSQL: {e}")
         raise
 
 
