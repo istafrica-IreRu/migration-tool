@@ -149,16 +149,32 @@ const MigrationPhaseOne = ({
 
           {loading ? (
             <div className="flex items-center justify-center py-8 text-muted-foreground">
-              Loading database information...
+              Checking database connection...
             </div>
           ) : error ? (
-            <div className="flex items-center justify-center py-8 text-destructive">
-              Failed to load database information
-            </div>
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <div className="space-y-2">
+                  <p>{error}</p>
+                  <p className="text-sm">
+                    Please configure your database connection using the "Connection Settings" button in the top-right corner.
+                  </p>
+                </div>
+              </AlertDescription>
+            </Alert>
           ) : tables.length === 0 ? (
-            <div className="flex items-center justify-center py-8 text-muted-foreground">
-              No tables found in database
-            </div>
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <div className="space-y-2">
+                  <p className="font-medium">No database connection configured</p>
+                  <p className="text-sm">
+                    Click the "Connection Settings" button in the top-right corner to configure your MSSQL and PostgreSQL database credentials.
+                  </p>
+                </div>
+              </AlertDescription>
+            </Alert>
           ) : (
             <div className="rounded-lg border bg-muted/50 p-4">
               <p className="text-sm text-muted-foreground">
