@@ -544,8 +544,12 @@ def run_normalization_scripts(migration_types: List[str], migration_files: Dict[
         
         emit_progress('connecting', f'Connecting to PostgreSQL for {total_modules} module migration(s)...', 5)
         
-        # Connect to PostgreSQL
-        pg_conn = get_pg_connection()
+        # Connect to PostgreSQL using runtime config
+        config = load_config(runtime_config)
+        try:
+            pg_conn = psycopg2.connect(**config.postgresql.get_connection_params())
+        except Exception as e:
+            raise Exception(f"Failed to connect to PostgreSQL: {e}")
         pg_cursor = pg_conn.cursor()
         
         # Execute each migration script sequentially
