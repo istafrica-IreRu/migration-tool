@@ -178,11 +178,24 @@ def run_migration(selected_tables: List[str], translations_file: str = None, nor
         # Update translate_identifier to use the loaded dict
         # The function in main.py uses the global TRANSLATION_DICT, so we just need to set it
         
+        
         # Connect to databases
         emit_progress('connecting', 'Connecting to databases...', 5)
-        mssql_conn = get_configured_mssql_connection()
-        pg_conn = get_pg_connection()
-        pg_conn.autocommit = True
+        
+        # Use runtime config for both connections
+        config = load_config(runtime_config)
+        
+        try:
+            mssql_conn = pyodbc.connect(config.mssql.get_connection_string())
+        except Exception as e:
+            raise Exception(f"Failed to connect to MSSQL: {e}")
+        
+        try:
+            pg_conn = psycopg2.connect(**config.postgresql.get_connection_params())
+            pg_conn.autocommit = True
+        except Exception as e:
+            raise Exception(f"Failed to connect to PostgreSQL: {e}")
+        
         pg_cursor = pg_conn.cursor()
         
         # Get metadata
