@@ -86,9 +86,14 @@ const ConnectionDialog = ({ open, onOpenChange }: ConnectionDialogProps) => {
 
             toast({
                 title: "Success",
-                description: "Database connections configured successfully",
+                description: "Database connections configured successfully. Refreshing...",
             });
+
+            // Close dialog and reload page to fetch tables with new credentials
             onOpenChange(false);
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
         } catch (error) {
             toast({
                 title: "Connection Failed",
