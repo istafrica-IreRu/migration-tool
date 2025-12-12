@@ -26,25 +26,18 @@ wheels/
 .venv/
 venv/
 ENV/
-<<<<<<< HEAD
 env/
-=======
->>>>>>> develop
 
 # IDE
 .vscode/
 .idea/
-<<<<<<< HEAD
 *.swp
 *.swo
 *~
-=======
->>>>>>> develop
 
 # OS
 .DS_Store
 Thumbs.db
-<<<<<<< HEAD
 
 # Project specific
 view_errors.json
@@ -57,5 +50,6 @@ migration_report_*.md
 # Database credentials (if any)
 config.ini
 .env
-=======
->>>>>>> develop
+
+# Exemptions
+!frontend-lovable/src/lib/
