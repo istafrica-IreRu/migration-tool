@@ -432,9 +432,111 @@ CREATE INDEX IF NOT EXISTS "idx_Nr_ApplicantProcedureSubjects_ProcedureNumber" O
 -- Phase 4: Migrate Data from Old Tables to Normalized Tables
 -- ============================================================================
 
--- IMPORTANT: This migration assumes Nr_Users table is already populated from the old Users table.
--- ApplicantTable.UserID references the old Users.ID, which should map to Nr_Users.UserID.
--- We do NOT create new users - we link to existing users via UserID.
+-- Step 0: Handle legacy applicants without UserID
+-- Create Users and Addresses for applicants that don't have them yet
+-- Deduplication Logic:
+-- 1. If Email exists: Deduplicate by Email (merges multiple apps from same email)
+-- 2. If Email is NULL: Deduplicate by FirstName + Name (creates unique user for each name)
+WITH UniqueApplicants AS (
+    SELECT DISTINCT ON (
+        CASE 
+            WHEN "Email" IS NOT NULL AND "Email" <> '' THEN "Email" 
+            ELSE "FirstName" || "Name" 
+        END
+    )
+        "FirstName",
+        "Name",
+        "Email",
+        "Street",
+        "PostalCode",
+        "Residence" as "City",
+        "Country",
+        "GUID" as "RepresentativeGUID" -- Pick one GUID to represent the user (for address data source)
+    FROM "ApplicantTable"
+    WHERE "UserID" IS NULL
+),
+NewUserIDs AS (
+    SELECT 
+        "FirstName",
+        "Name",
+        "Email",
+        "RepresentativeGUID",
+        nextval('"Nr_Addresses_ID_seq"') as NewAddressID,
+        nextval('"Nr_Users_UserID_seq"') as NewUserID
+    FROM UniqueApplicants
+),
+InsertAddresses AS (
+    INSERT INTO "Nr_Addresses" (
+        "ID", "Street", "PostalCode", "City", "Country", 
+        "AddressType", "Tenant", "CreatedAt", "UpdatedAt"
+    )
+    SELECT
+        n.NewAddressID,
+        COALESCE(ua."Street", ''),
+        COALESCE(ua."PostalCode", ''),
+        COALESCE(ua."City", ''),
+        COALESCE(ua."Country", 'DE'),
+        'APPLICANT',
+        1,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+    FROM NewUserIDs n
+    JOIN UniqueApplicants ua ON 
+        (
+            -- Match by Email if present
+            COALESCE(ua."Email", '') <> '' 
+            AND ua."Email" = n."Email"
+        )
+        OR
+        (
+            -- Match by Name if Email is missing
+            COALESCE(ua."Email", '') = '' 
+            AND COALESCE(n."Email", '') = ''
+            AND COALESCE(ua."FirstName", '') = COALESCE(n."FirstName", '')
+            AND COALESCE(ua."Name", '') = COALESCE(n."Name", '')
+        )
+),
+InsertUsers AS (
+    INSERT INTO "Nr_Users" (
+        "UserID", "Nr_AddressID", "FirstName", "LastName", "Email",
+        "GlobalUID", "TenantID", "LastModified"
+    )
+    SELECT
+        n.NewUserID,
+        n.NewAddressID,
+        COALESCE(n."FirstName", ''),
+        COALESCE(n."Name", ''),
+        n."Email",
+        n."RepresentativeGUID", 
+        1,
+        CURRENT_TIMESTAMP
+    FROM NewUserIDs n
+)
+UPDATE "ApplicantTable" at
+SET "UserID" = n.NewUserID
+FROM NewUserIDs n
+WHERE 
+    at."UserID" IS NULL
+    AND (
+        (
+            -- Match by Email if present
+            COALESCE(at."Email", '') <> '' 
+            AND at."Email" = n."Email"
+        )
+        OR
+        (
+            -- Match by Name if Email is missing
+            COALESCE(at."Email", '') = '' 
+            AND COALESCE(n."Email", '') = ''
+            AND COALESCE(at."FirstName", '') = COALESCE(n."FirstName", '')
+            AND COALESCE(at."Name", '') = COALESCE(n."Name", '')
+        )
+    );
+
+-- IMPORTANT: Step 1 assumes all applicants have a valid UserID.
+-- For standard applicants, this links to the existing UserID from the old Users table.
+-- For legacy applicants (originally without UserID), Step 0 has already created the User records and backfilled the ID.
+-- Therefore, at this stage, we simply link to the existing (or newly created) UserID.
 
 -- Step 1: Migrate to Nr_Applicants (linking to existing User records via UserID)
 -- Each applicant record represents one application by a user to a procedure

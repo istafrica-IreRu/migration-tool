@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Database, GitBranch, Settings } from "lucide-react";
+import { Database, GitBranch, Settings, FileText } from "lucide-react";
 import { useState } from "react";
 import {
     Sidebar,
@@ -39,6 +39,12 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             url: "/phase-2",
             icon: GitBranch,
             description: "Module-based Migration",
+        },
+        {
+            title: "Reports & History",
+            url: "/reports",
+            icon: FileText,
+            description: "Logs and Activity",
         },
     ];
 

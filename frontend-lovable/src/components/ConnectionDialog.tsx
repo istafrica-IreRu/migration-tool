@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -12,6 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+
+import { useMigration } from "@/contexts/MigrationContext";
 
 interface ConnectionDialogProps {
     open: boolean;
@@ -36,6 +38,7 @@ interface ConnectionFormData {
 
 const ConnectionDialog = ({ open, onOpenChange }: ConnectionDialogProps) => {
     const { toast } = useToast();
+    const { addHistoryEntry, updateConnectionInfo, fullSettings, updateFullSettings } = useMigration();
     const [isLoading, setIsLoading] = useState(false);
     const [formData, setFormData] = useState<ConnectionFormData>({
         mssql: {
@@ -52,6 +55,13 @@ const ConnectionDialog = ({ open, onOpenChange }: ConnectionDialogProps) => {
             password: "",
         },
     });
+
+    // Populate form data from context when dialog opens
+    useEffect(() => {
+        if (open && fullSettings) {
+            setFormData(fullSettings);
+        }
+    }, [open, fullSettings]);
 
     const handleInputChange = (
         db: "mssql" | "postgresql",
@@ -84,6 +94,21 @@ const ConnectionDialog = ({ open, onOpenChange }: ConnectionDialogProps) => {
                 throw new Error(data.error || "Connection failed");
             }
 
+            // Update shared state
+            updateConnectionInfo({
+                mssql: formData.mssql.database,
+                postgresql: formData.postgresql.database
+            });
+
+            updateFullSettings(formData);
+
+            addHistoryEntry({
+                type: 'connection',
+                description: 'Database Settings Updated',
+                status: 'success',
+                details: `MSSQL (${formData.mssql.database}) and PostgreSQL (${formData.postgresql.database}) connected.`
+            });
+
             toast({
                 title: "Success",
                 description: "Database connections configured successfully. Refreshing...",
@@ -95,6 +120,12 @@ const ConnectionDialog = ({ open, onOpenChange }: ConnectionDialogProps) => {
                 window.location.reload();
             }, 500);
         } catch (error) {
+            addHistoryEntry({
+                type: 'connection',
+                description: 'Connection Config Failed',
+                status: 'error',
+                details: error instanceof Error ? error.message : "Settings update failed."
+            });
             toast({
                 title: "Connection Failed",
                 description: error instanceof Error ? error.message : "Unknown error",

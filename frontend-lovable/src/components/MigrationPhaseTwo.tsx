@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Play, X } from "lucide-react";
+import { Play, X, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { apiService } from "@/lib/api";
+import { apiService, Module } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import {
   Select,
@@ -18,36 +18,39 @@ interface MigrationPhaseTwoProps {
   setIsMigrating: (value: boolean) => void;
 }
 
-const migrationModules = {
-  users: {
-    title: "Users Tables (V000)",
-    description: "Creates the foundational Nr_Users table for personal information (students, teachers, guardians, applicants).",
-    file: "reference/V000__create_normalized_users_table.sql",
-    order: 1,
-  },
-  enrollment: {
-    title: "Enrollment/Applicant Tables (V001)",
-    description: "Normalizes applicant data, including addresses, guardians, and application info.",
-    file: "reference/V001__create_normalized_enrollment_tables.sql",
-    order: 2,
-  },
-  guardians: {
-    title: "Guardians Tables (V002)",
-    description: "Normalizes guardian data and links it to students.",
-    file: "reference/V002__create_normalized_guardian_tables.sql",
-    order: 3,
-  },
-  academic: {
-    title: "Academic Tables (V003)",
-    description: "Normalizes academic data like subjects, courses, and grades.",
-    file: "reference/V003__create_normalized_academic_tables.sql",
-    order: 4,
-  },
-};
-
 const MigrationPhaseTwo = ({ isMigrating, setIsMigrating }: MigrationPhaseTwoProps) => {
+  const [migrationModules, setMigrationModules] = useState<Module[]>([]);
+  const [isLoadingModules, setIsLoadingModules] = useState(true);
   const [selectedModules, setSelectedModules] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+
+  useEffect(() => {
+    const loadModules = async () => {
+      setIsLoadingModules(true);
+      try {
+        const result = await apiService.fetchModules();
+        if (result.error) {
+          toast({
+            title: "Failed to load modules",
+            description: result.error,
+            variant: "destructive",
+          });
+        } else {
+          setMigrationModules(result.modules);
+        }
+      } catch (err) {
+        toast({
+          title: "Failed to load modules",
+          description: "An unexpected error occurred",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoadingModules(false);
+      }
+    };
+
+    loadModules();
+  }, [toast]);
 
   const handleSelectModule = (value: string) => {
     const newSelected = new Set(selectedModules);
@@ -78,12 +81,12 @@ const MigrationPhaseTwo = ({ isMigrating, setIsMigrating }: MigrationPhaseTwoPro
     setIsMigrating(true);
 
     try {
-      // Convert Set to Array and sort by order
-      const modulesArray = Array.from(selectedModules).sort((a, b) => {
-        const orderA = migrationModules[a as keyof typeof migrationModules].order;
-        const orderB = migrationModules[b as keyof typeof migrationModules].order;
-        return orderA - orderB;
-      });
+      // Find selected module objects and sort by version
+      const selectedModuleInfo = migrationModules
+        .filter(m => selectedModules.has(m.id))
+        .sort((a, b) => a.order - b.order);
+
+      const modulesArray = selectedModuleInfo.map(m => m.id);
 
       const result = await apiService.startNormalization(modulesArray);
 
@@ -112,9 +115,13 @@ const MigrationPhaseTwo = ({ isMigrating, setIsMigrating }: MigrationPhaseTwoPro
   };
 
   // Get available modules that haven't been selected
-  const availableModules = Object.entries(migrationModules).filter(
-    ([key]) => !selectedModules.has(key)
+  const availableModules = migrationModules.filter(
+    (m) => !selectedModules.has(m.id)
   );
+
+  const selectedModulesOrdered = migrationModules
+    .filter(m => selectedModules.has(m.id))
+    .sort((a, b) => a.order - b.order);
 
   return (
     <div className="space-y-6">
@@ -129,85 +136,79 @@ const MigrationPhaseTwo = ({ isMigrating, setIsMigrating }: MigrationPhaseTwoPro
           <div className="space-y-3">
             <label className="text-sm font-medium">Migration Modules</label>
 
-            {/* Selected modules display */}
-            {selectedModules.size > 0 && (
-              <div className="flex flex-wrap gap-2 p-3 border rounded-lg bg-muted/50">
-                {Array.from(selectedModules)
-                  .sort((a, b) => {
-                    const orderA = migrationModules[a as keyof typeof migrationModules].order;
-                    const orderB = migrationModules[b as keyof typeof migrationModules].order;
-                    return orderA - orderB;
-                  })
-                  .map((key) => (
-                    <Badge key={key} variant="secondary" className="gap-1">
-                      {migrationModules[key as keyof typeof migrationModules].title}
-                      <button
-                        onClick={() => removeModule(key)}
-                        disabled={isMigrating}
-                        className="ml-1 hover:bg-secondary-foreground/20 rounded-full"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
+            {isLoadingModules ? (
+              <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/50 text-sm text-muted-foreground italic">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Searching for modules in reference folder...
               </div>
-            )}
+            ) : (
+              <>
+                {/* Selected modules display */}
+                {selectedModules.size > 0 && (
+                  <div className="flex flex-wrap gap-2 p-3 border rounded-lg bg-muted/50">
+                    {selectedModulesOrdered.map((module) => (
+                      <Badge key={module.id} variant="secondary" className="gap-1">
+                        {module.title}
+                        <button
+                          onClick={() => removeModule(module.id)}
+                          disabled={isMigrating}
+                          className="ml-1 hover:bg-secondary-foreground/20 rounded-full"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
 
-            {/* Multi-select dropdown */}
-            <Select
-              value=""
-              onValueChange={handleSelectModule}
-              disabled={isMigrating || availableModules.length === 0}
-            >
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={
-                    selectedModules.size === 0
-                      ? "Select modules..."
-                      : availableModules.length === 0
-                        ? "All modules selected"
-                        : "Select more modules..."
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {availableModules.map(([key, module]) => (
-                  <SelectItem key={key} value={key}>
-                    {module.title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                {/* Multi-select dropdown */}
+                <Select
+                  value=""
+                  onValueChange={handleSelectModule}
+                  disabled={isMigrating || availableModules.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={
+                        selectedModules.size === 0
+                          ? "Select modules..."
+                          : availableModules.length === 0
+                            ? "All modules selected"
+                            : "Select more modules..."
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableModules.map((module) => (
+                      <SelectItem key={module.id} value={module.id}>
+                        {module.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
+            )}
           </div>
 
-          {selectedModules.size > 0 && (
+          {!isLoadingModules && selectedModules.size > 0 && (
             <div className="rounded-lg border bg-muted/50 p-4">
               <p className="text-sm font-medium mb-2">
                 Selected: {selectedModules.size} module{selectedModules.size > 1 ? 's' : ''}
               </p>
               <div className="space-y-2">
-                {Array.from(selectedModules)
-                  .sort((a, b) => {
-                    const orderA = migrationModules[a as keyof typeof migrationModules].order;
-                    const orderB = migrationModules[b as keyof typeof migrationModules].order;
-                    return orderA - orderB;
-                  })
-                  .map((key) => {
-                    const module = migrationModules[key as keyof typeof migrationModules];
-                    return (
-                      <div key={key} className="text-sm">
-                        <p className="font-medium">{module.title}</p>
-                        <p className="text-muted-foreground text-xs">{module.description}</p>
-                      </div>
-                    );
-                  })}
+                {selectedModulesOrdered.map((module) => (
+                  <div key={module.id} className="text-sm">
+                    <p className="font-medium">{module.title}</p>
+                    <p className="text-muted-foreground text-xs">{module.description}</p>
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
           <Button
             onClick={startModuleMigration}
-            disabled={isMigrating || selectedModules.size === 0}
+            disabled={isMigrating || selectedModules.size === 0 || isLoadingModules}
             className="w-full"
             size="lg"
           >

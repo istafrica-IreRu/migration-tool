@@ -3,11 +3,14 @@ import MigrationPhaseTwo from "@/components/MigrationPhaseTwo";
 import ProgressSection from "@/components/ProgressSection";
 import { useWebSocket } from "@/hooks/use-websocket";
 
+import { useMigration } from "@/contexts/MigrationContext";
+
 const PhaseTwo = () => {
     const [isMigrating, setIsMigrating] = useState(false);
     const [progress, setProgress] = useState(0);
     const [currentPhase, setCurrentPhase] = useState("-");
     const [currentTable, setCurrentTable] = useState("-");
+    const { addHistoryEntry } = useMigration();
 
     const { lastProgress, lastComplete, lastError } = useWebSocket();
 
@@ -25,14 +28,26 @@ const PhaseTwo = () => {
         if (lastComplete) {
             setIsMigrating(false);
             setProgress(100);
+            addHistoryEntry({
+                type: 'normalization',
+                description: 'Module Migration Completed',
+                status: 'success',
+                details: 'Successfully processed and normalized migration modules.'
+            });
         }
-    }, [lastComplete]);
+    }, [lastComplete, addHistoryEntry]);
 
     useEffect(() => {
         if (lastError) {
             setIsMigrating(false);
+            addHistoryEntry({
+                type: 'normalization',
+                description: 'Module Migration Failed',
+                status: 'error',
+                details: lastError.error
+            });
         }
-    }, [lastError]);
+    }, [lastError, addHistoryEntry]);
 
     return (
         <div className="space-y-6">
@@ -44,6 +59,7 @@ const PhaseTwo = () => {
                 currentPhase={currentPhase}
                 currentTable={currentTable}
                 progress={progress}
+                reportType="normalization"
             />
         </div>
     );

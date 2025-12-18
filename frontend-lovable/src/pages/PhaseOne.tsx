@@ -3,11 +3,14 @@ import MigrationPhaseOne from "@/components/MigrationPhaseOne";
 import ProgressSection from "@/components/ProgressSection";
 import { useWebSocket } from "@/hooks/use-websocket";
 
+import { useMigration } from "@/contexts/MigrationContext";
+
 const PhaseOne = () => {
     const [isMigrating, setIsMigrating] = useState(false);
     const [progress, setProgress] = useState(0);
     const [currentPhase, setCurrentPhase] = useState("-");
     const [currentTable, setCurrentTable] = useState("-");
+    const { addHistoryEntry } = useMigration();
 
     const { lastProgress, lastComplete, lastError } = useWebSocket();
 
@@ -25,14 +28,26 @@ const PhaseOne = () => {
         if (lastComplete) {
             setIsMigrating(false);
             setProgress(100);
+            addHistoryEntry({
+                type: 'migration',
+                description: 'Raw Migration Completed',
+                status: 'success',
+                details: 'Successfully migrated structure and data from MSSQL to PostgreSQL.'
+            });
         }
-    }, [lastComplete]);
+    }, [lastComplete, addHistoryEntry]);
 
     useEffect(() => {
         if (lastError) {
             setIsMigrating(false);
+            addHistoryEntry({
+                type: 'migration',
+                description: 'Raw Migration Failed',
+                status: 'error',
+                details: lastError.error
+            });
         }
-    }, [lastError]);
+    }, [lastError, addHistoryEntry]);
 
     return (
         <div className="space-y-6">
@@ -44,6 +59,7 @@ const PhaseOne = () => {
                 currentPhase={currentPhase}
                 currentTable={currentTable}
                 progress={progress}
+                reportType="migration"
             />
         </div>
     );

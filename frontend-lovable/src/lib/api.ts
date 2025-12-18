@@ -9,6 +9,15 @@ export interface Table {
   name: string;
 }
 
+export interface Module {
+  id: string;
+  title: string;
+  description: string;
+  file: string;
+  version: number;
+  order: number;
+}
+
 export interface MigrationStatus {
   status: 'idle' | 'running' | 'completed' | 'error';
   progress: number;
@@ -56,6 +65,25 @@ class ApiService {
       console.error('Error fetching tables:', error);
       return {
         tables: [],
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  async fetchModules(): Promise<{ modules: Module[]; error?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/modules`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch modules');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error fetching modules:', error);
+      return {
+        modules: [],
         error: error instanceof Error ? error.message : 'Unknown error'
       };
     }

@@ -1,0 +1,27 @@
+Validation Report
+==================================================
+
+❌ ERRORS (5):
+  - [ERROR] data_quality: public.Nr_Users - Row count mismatch (Internal): public.GuardianTable=3124, public.Nr_Users=2695 (429 occurrences)
+  - [ERROR] data_quality: public.Nr_StudentGuardians - Row count mismatch (Internal): public.GuardianTable=3124, public.Nr_StudentGuardians=1419 (1705 occurrences)
+  - [ERROR] data_quality: public.Nr_GuardianContact - Row count mismatch (Internal): public.GuardianTable=3124, public.Nr_GuardianContact=257 (2867 occurrences)
+  - [ERROR] data_quality: public.Nr_GuardianFinance - Row count mismatch (Internal): public.GuardianTable=3124, public.Nr_GuardianFinance=1 (3123 occurrences)
+  - [ERROR] data_quality: public.Nr_GuardianEmployment - Row count mismatch (Internal): public.GuardianTable=3124, public.Nr_GuardianEmployment=511 (2613 occurrences)
+
+ℹ️ INFO (1):
+  - [INFO] data_quality: public.Nr_Guardians - Row count matched: 1332 rows
+
+Total Issues Found: 6
+==================================================
+
+Row Count Summary
+--------------------------------------------------------------------------------
+Table / Mapping                                    | Source     | Target     | Status
+--------------------------------------------------------------------------------
+public.GuardianTable -> public.Nr_Users            | 3124       | 2695       | ❌ DIFF (+429)
+public.Nr_Guardians -> public.Nr_Guardians         | 1332       | 1332       | ✅ MATCH
+public.GuardianTable -> public.Nr_StudentGuardians | 3124       | 1419       | ❌ DIFF (+1705)
+public.GuardianTable -> public.Nr_GuardianContact  | 3124       | 257        | ❌ DIFF (+2867)
+public.GuardianTable -> public.Nr_GuardianFinance  | 3124       | 1          | ❌ DIFF (+3123)
+public.GuardianTable -> public.Nr_GuardianEmployment | 3124       | 511        | ❌ DIFF (+2613)
+--------------------------------------------------------------------------------

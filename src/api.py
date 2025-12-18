@@ -7,7 +7,8 @@ import sys
 import json
 import logging
 import threading
-from typing import Dict, List, Optional, Any
+import re
+from typing import Dict, List, Optional, Any, Tuple
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
@@ -97,6 +98,61 @@ def emit_error(error: str):
     """Emit error via WebSocket."""
     migration_state['status'] = 'error'
     migration_state['error'] = error
+    
+    socketio.emit('progress', {
+        'status': 'error',
+        'error': error,
+        'phase': migration_state['current_phase'],
+        'message': f"Error: {error}"
+    })
+
+
+def get_available_modules() -> Dict[str, Dict[str, Any]]:
+    """Scan reference directory for migration modules."""
+    reference_dir = 'reference'
+    modules = {}
+    
+    if not os.path.exists(reference_dir):
+        return modules
+    
+    # Pattern: V001__description.sql
+    pattern = re.compile(r'V(\d+)__(.*)\.sql')
+    
+    for filename in os.listdir(reference_dir):
+        match = pattern.match(filename)
+        if match:
+            version = match.group(1)
+            raw_name = match.group(2)
+            
+            # Create a slug/key from the name (e.g. create_normalized_users_table -> users)
+            # Find common patterns to simplify the key
+            module_id = raw_name.replace('create_normalized_', '').replace('_table', '').replace('_tables', '')
+            
+            # Format a nice title
+            title_parts = [p.capitalize() for p in module_id.split('_')]
+            title = f"{' '.join(title_parts)} Tables (V{version})"
+            
+            # Try to get description from the first line of the SQL file
+            description = f"Normalization script for {module_id} module."
+            file_path = os.path.join(reference_dir, filename)
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    first_line = f.readline().strip()
+                    if first_line.startswith('--'):
+                        description = first_line.lstrip('- ').strip()
+            except Exception:
+                pass
+                
+            modules[module_id] = {
+                'id': module_id,
+                'title': title,
+                'description': description,
+                'file': file_path.replace('\\', '/'),
+                'version': int(version),
+                'order': int(version)
+            }
+            
+    return modules
     socketio.emit('error', {'error': error})
 
 
@@ -324,7 +380,43 @@ def run_migration(selected_tables: List[str], translations_file: str = None, nor
         emit_progress('views', 'Migrating views...', 90)
         migrate_views(pg_cursor, metadata['views'], metadata['tables'])
         
-        # Phase 6: Normalization (if requested)
+        # Phase 6: Validation
+        emit_progress('validation', 'Performing data validation and integrity checks...', 95)
+        
+        from validation import DataValidator
+        
+        # Use connections that are already open
+        validator = DataValidator(mssql_conn, pg_conn)
+        
+        # 1. Compare row counts
+        emit_progress('validation', 'Comparing row counts...', 96)
+        validator.compare_row_counts(metadata['tables'])
+        
+        # 2. Validate target data (duplicates, nulls, orphans)
+        emit_progress('validation', 'Validating target data constraints...', 97)
+        validator.validate_target_data(metadata['tables'])
+        
+        # 3. Spot checks
+        emit_progress('validation', 'Performing spot checks on random records...', 98)
+        validator.perform_spot_checks(metadata['tables'], sample_size=5)
+        
+        # Generate & Save Report
+        report = validator.generate_report()
+        report_file = 'migration_validation_report.txt'
+        try:
+            with open(report_file, 'w', encoding='utf-8') as f:
+                f.write(report)
+            logging.info(f"Validation report saved to {report_file}")
+            emit_progress('validation', f'Validation complete. Report saved to {report_file}', 99)
+        except Exception as e:
+            logging.error(f"Could not save validation report: {e}")
+            emit_progress('validation', 'Validation complete (failed to save report)', 99)
+
+        # Emit validation summary to UI (optional, or just rely on the report)
+        if validator.issues:
+             emit_progress('validation', f'found {len(validator.issues)} validation issues. Check report.', 99)
+             
+        # Phase 7: Normalization (if requested)
         if normalize:
             emit_progress('normalize', 'Running normalization scripts...', 95)
             # pg_conn.autocommit = False
@@ -487,6 +579,19 @@ def stop_migration():
     return jsonify({'message': 'No migration in progress'}), 400
 
 
+@app.route('/api/modules', methods=['GET'])
+def get_modules():
+    """Get list of available migration modules."""
+    try:
+        modules = get_available_modules()
+        # Return as a list sorted by order
+        modules_list = sorted(modules.values(), key=lambda x: x['order'])
+        return jsonify({'modules': modules_list})
+    except Exception as e:
+        logging.error(f"Error fetching modules: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/normalize', methods=['POST'])
 def run_normalization():
     """Run normalization migration scripts."""
@@ -505,16 +610,12 @@ def run_normalization():
     if not migration_types:
         return jsonify({'error': 'No migration types specified'}), 400
     
-    # Map migration types to SQL files
-    migration_files = {
-        'users': 'reference/V000__create_normalized_users_table.sql',
-        'enrollment': 'reference/V001__create_normalized_enrollment_tables.sql',
-        'guardians': 'reference/V002__create_normalized_guardian_tables.sql',
-        'academic': 'reference/V003__create_normalized_academic_tables.sql'
-    }
+    # Map migration types to SQL files dynamically
+    available_modules = get_available_modules()
+    migration_files = {k: v['file'] for k, v in available_modules.items() if k in migration_types}
     
     # Validate all migration types
-    invalid_types = [mt for mt in migration_types if mt not in migration_files]
+    invalid_types = [mt for mt in migration_types if mt not in available_modules]
     if invalid_types:
         return jsonify({'error': f'Invalid migration type(s): {", ".join(invalid_types)}'}), 400
     
@@ -601,11 +702,124 @@ def run_normalization_scripts(migration_types: List[str], migration_files: Dict[
                 pg_conn.rollback()
                 raise Exception(f'SQL execution error in {migration_type} module: {str(e)}')
         
+        # Validation Phase for Normalization
+        emit_progress('validation', 'Performing schema integrity checks...', 95)
+        
+        
+        from validation import DataValidator
+        # For Phase 2 (Normalization), we validate Postgres Raw Tables vs Postgres Normalized Tables
+        # No MSSQL connection required here as data is already in PG from Phase 1
+        validator = DataValidator(pg_conn=pg_conn)
+        
+        # 1. Internal Row Count Comparison (Raw PG -> Normalized PG)
+        emit_progress('validation', 'Analyzing SQL scripts for table mappings...', 96)
+        
+        def parse_sql_mappings(files_dict: Dict[str, str]) -> List[Tuple[str, str]]:
+            """
+            Parses SQL files to find 'INSERT INTO Target ... SELECT ... FROM Source' patterns.
+            Returns a list of (Source, Target) tuples.
+            """
+            mappings = []
+            
+            # Regex to find INSERT INTO target
+            # Group 1: Schema (optional), Group 2: Table
+            # Note: We relax the regex to find all INSERT INTO occurrences
+            insert_pattern = re.compile(r'INSERT\s+INTO\s+(?:"?(\w+)"?(?:\."?(\w+)"?)?)', re.IGNORECASE)
+            
+            # Regex to find FROM source
+            # This is harder to associate 1:1 with INSERTs if they are far apart in a CTE
+            # But usually they are somewhat close. 
+            # For mapping validation, getting the TARGET table is the most important part
+            # to scope validation. The SOURCE is less critical for the scope filter (it drives row count comparison).
+            
+            # Improved Strategy:
+            # 1. Scan the whole file for INSERT INTO statements.
+            # 2. For each INSERT, try to find a FROM clause following it?
+            #    Or just extract all TARGET tables.
+            
+            for clean_name, file_path in files_dict.items():
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        
+                    # Clean comments
+                    content = re.sub(r'--.*$', '', content, flags=re.MULTILINE) 
+                    content = re.sub(r'/\*.*?\*/', '', content, flags=re.DOTALL)
+                    
+                    # Find all INSERT INTO targets
+                    # We iterate through the matches
+                    for match in insert_pattern.finditer(content):
+                        # Extract Target
+                        if match.group(2):
+                            target_table = f"{match.group(1)}.{match.group(2)}"
+                        else:
+                            target_table = f"public.{match.group(1)}"
+                        
+                        # Just generic "Source" for now to satisfy the tuple requirement
+                        # If we really need source for specific row count stats, we look for FROM nearby
+                        # But for scoping validation, TARGET is key.
+                        source_table = "Unknown" 
+                        
+                        # Try to find a FROM clause in the vicinity (next 500 chars?)
+                        # This is fuzzy but better than nothing
+                        start_pos = match.end()
+                        search_window = content[start_pos:start_pos+2000] # reasonable window
+                        
+                        from_match = re.search(r'FROM\s+(?:"?(\w+)"?(?:\."?(\w+)"?)?)', search_window, re.IGNORECASE)
+                        if from_match:
+                             if from_match.group(2):
+                                 source_table = f"{from_match.group(1)}.{from_match.group(2)}"
+                             else:
+                                 source_table = f"public.{from_match.group(1)}"
+                        
+                        mappings.append((source_table, target_table))
+                        logging.info(f"Discovered Mapping: {source_table} -> {target_table}")
+                        
+                except Exception as e:
+                    logging.warning(f"Error parsing SQL file {file_path}: {e}")
+            
+            return mappings
+
+        # Parse mappings dynamically from the execution files
+        # We pass the dictionary { 'V000...': 'path/to/file' }
+        mappings = parse_sql_mappings(migration_files)
+        
+        # If no mappings found (fallback or error), use hardcoded defaults? 
+        # Better to warn and proceed with empty list or basic set.
+        # If no mappings found, log it.
+        if not mappings:
+             logging.warning("No mappings discovered from SQL (likely schema-only migration).")
+        
+        # Call internal comparison
+        validator.compare_internal_counts(mappings)
+        
+        # 2. Schema Integrity Checks
+        emit_progress('validation', 'Performing schema integrity checks...', 98)
+        
+        # Validate 'public' schema (where normalized tables are usually created)
+        # Scope validation to only the tables affected by the migration
+        target_tables = [m[1] for m in mappings]
+        validator.validate_schema_integrity(schema='public', table_filter=target_tables)
+        
+        # 2.1 Column Redundancy Check
+        emit_progress('validation', 'Checking for column redundancy...', 98)
+        validator.check_column_redundancy(schema='public', table_filter=target_tables)
+        
+        # Generate Report
+        report = validator.generate_report()
+        report_file = 'normalization_validation_report.txt'
+        try:
+            with open(report_file, 'w', encoding='utf-8') as f:
+                f.write(report)
+            logging.info(f"Normalization validation report saved to {report_file}")
+            emit_progress('validation', f'Validation complete. Report saved to {report_file}', 100)
+        except Exception as e:
+            logging.error(f"Could not save validation report: {e}")
+        
         # Cleanup
         pg_cursor.close()
         pg_conn.close()
         
-        emit_progress('complete', f'All {total_modules} module(s) migrated successfully!', 100)
         emit_complete()
         
     except Exception as e:
@@ -619,6 +833,43 @@ def run_normalization_scripts(migration_types: List[str], migration_files: Dict[
 def serve_frontend():
     """Serve the frontend application."""
     return send_from_directory(app.static_folder, 'index.html')
+
+
+@app.route('/api/report', methods=['GET'])
+def get_validation_report():
+    """Get the latest validation report content."""
+    report_type = request.args.get('type', 'normalization') # normalization or migration
+    filename = 'normalization_validation_report.txt' if report_type == 'normalization' else 'migration_validation_report.txt'
+    
+    if not os.path.exists(filename):
+        return jsonify({'content': 'No report generated yet.'})
+        
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return jsonify({'content': content})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/report/download', methods=['GET'])
+def download_validation_report():
+    """Download the latest validation report."""
+    report_type = request.args.get('type', 'normalization')
+    filename = 'normalization_validation_report.txt' if report_type == 'normalization' else 'migration_validation_report.txt'
+    
+    if not os.path.exists(filename):
+        return jsonify({'error': 'Report not found'}), 404
+        
+    try:
+        return send_from_directory(
+            os.getcwd(), 
+            filename, 
+            as_attachment=True, 
+            download_name=f'{report_type}_validation_report.txt'
+        )
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @socketio.on('connect')

@@ -12,6 +12,7 @@ const Index = () => {
   const [progress, setProgress] = useState(0);
   const [currentPhase, setCurrentPhase] = useState("-");
   const [currentTable, setCurrentTable] = useState("-");
+  const [activeTab, setActiveTab] = useState("phase1");
 
   const { lastProgress, lastComplete, lastError } = useWebSocket();
 
@@ -56,7 +57,7 @@ const Index = () => {
         {/* Main Content */}
         <Card className="border-none shadow-sm">
           <CardContent className="pt-6">
-            <Tabs defaultValue="phase1" className="space-y-6">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
               <TabsList className="grid w-full grid-cols-2 h-auto p-1">
                 <TabsTrigger
                   value="phase1"
@@ -96,11 +97,19 @@ const Index = () => {
         </Card>
 
         {/* Progress Section */}
-        <ProgressSection
-          currentPhase={currentPhase}
-          currentTable={currentTable}
-          progress={progress}
-        />
+        {(() => {
+          const reportType = activeTab === "phase1" ? "migration" : "normalization";
+          console.log('Rendering ProgressSection with activeTab:', activeTab, 'reportType:', reportType);
+          return (
+            <ProgressSection
+              key={activeTab}
+              currentPhase={currentPhase}
+              currentTable={currentTable}
+              progress={progress}
+              reportType={reportType}
+            />
+          );
+        })()}
       </div>
     </div>
   );

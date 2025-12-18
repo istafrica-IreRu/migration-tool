@@ -6,7 +6,9 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import DashboardLayout from "./components/DashboardLayout";
 import PhaseOne from "./pages/PhaseOne";
 import PhaseTwo from "./pages/PhaseTwo";
+import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
+import { MigrationProvider } from "./contexts/MigrationContext";
 
 const queryClient = new QueryClient();
 
@@ -15,14 +17,17 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<DashboardLayout><PhaseOne /></DashboardLayout>} />
-          <Route path="/phase-2" element={<DashboardLayout><PhaseTwo /></DashboardLayout>} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+      <MigrationProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<DashboardLayout><PhaseOne /></DashboardLayout>} />
+            <Route path="/phase-2" element={<DashboardLayout><PhaseTwo /></DashboardLayout>} />
+            <Route path="/reports" element={<Reports />} />
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </MigrationProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
